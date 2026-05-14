@@ -1,0 +1,6 @@
+.workspace/
+*.pyc
+__pycache__/
+.venv/
+*.zip:Zone.Identifier
+.env
