@@ -17,12 +17,24 @@
       "local": "phi3.5"
     }
   },
+  "tier_defaults": {
+    "test": {
+      "anthropic": "claude-haiku-4-5-20251001",
+      "openai": "gpt-4.1-mini",
+      "ollama": "phi3.5"
+    },
+    "production": {
+      "anthropic": "claude-sonnet-4-6",
+      "openai": "gpt-4.1",
+      "ollama": "phi3.5"
+    }
+  },
   "providers": {
     "anthropic": {
       "models": ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-7"]
     },
     "openai": {
-      "models": ["gpt-4.1-mini"]
+      "models": ["gpt-4.1-mini", "gpt-4.1"]
     },
     "ollama": {
       "base_url_env": "OLLAMA_HOST",

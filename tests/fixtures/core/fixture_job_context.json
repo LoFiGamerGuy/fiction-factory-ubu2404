@@ -1,0 +1,11 @@
+{
+  "job_id": "fixture-job-001",
+  "series_id": "test-series",
+  "book_id": "test-book",
+  "chapter_id": 1,
+  "scene_id": "ch01_sc01",
+  "model_tier": "test",
+  "seed": 42,
+  "run_timestamp": "2026-05-16T00:00:00Z",
+  "input_hash": "abc123def456"
+}
