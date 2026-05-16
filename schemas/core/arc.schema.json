@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/core/arc/v1",
+  "title": "Arc",
+  "description": "A character arc or subplot arc. Tracks the arc type, current phase, and the sequence of beats required for a complete arc. The Character Arc Ledger updates current_phase after each scene.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "arc_type", "current_phase", "entity_id", "entity_type"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique arc identifier."
+    },
+    "entity_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "ID of the entity this arc belongs to: a character_id or subplot_id."
+    },
+    "entity_type": {
+      "type": "string",
+      "enum": ["character", "subplot", "relationship"],
+      "description": "Whether this arc tracks a character, a subplot, or a character-pair relationship."
+    },
+    "arc_type": {
+      "type": "string",
+      "description": "Named arc template from the genre_profile or universal catalog (e.g. wound_and_healing, redemption, enemies_to_lovers, fall_from_grace, coming_of_age). Stub — expand arc taxonomy during Phase 7 implementation."
+    },
+    "current_phase": {
+      "type": "string",
+      "enum": ["not_started", "opening", "wound_open", "processing", "wound_healing", "resolved"],
+      "description": "Current arc phase. Mirrors character.arc_phase for character arcs."
+    },
+    "beats_required": {
+      "type": "array",
+      "description": "Ordered list of structural beats this arc must hit for a valid resolution. Stub — formalize beat taxonomy during Phase 7 implementation.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["beat_label", "status"],
+        "properties": {
+          "beat_label": {
+            "type": "string",
+            "description": "Human-readable label for the required arc beat (e.g. 'wound revealed', 'false resolution', 'true change moment')."
+          },
+          "beat_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Beat ID where this arc beat was delivered. Null until fulfilled."
+          },
+          "target_scene_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Planned scene where this beat should be delivered. Null if unscheduled."
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "fulfilled", "overdue"],
+            "description": "Delivery status. Overdue if target_scene_id has been finalized without delivery."
+          }
+        }
+      }
+    },
+    "resolution_scene_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Scene ID where this arc reached 'resolved' phase. Null until resolved."
+    }
+  }
+}

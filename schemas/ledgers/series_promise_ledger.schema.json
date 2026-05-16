@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/ledgers/series_promise_ledger/v1",
+  "title": "SeriesPromiseLedger Event",
+  "description": "Append-only event log for cross-book narrative promises. Mirrors PromiseLedger but scoped to series-level arcs (e.g. overarching mystery, series antagonist reveal, slow-burn romantic arc spanning multiple books). Stub — Series Promise Ledger is V1 or early V2 priority per decisions.md 2026-05-15.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "series_id", "book_number", "scene_id", "promise_id", "status", "timestamp"],
+  "properties": {
+    "event_id":    { "type": "string", "format": "uuid" },
+    "series_id":   { "type": "string", "description": "Series identifier." },
+    "book_number": { "type": "integer", "minimum": 1, "description": "Book ordinal where this event occurred." },
+    "book_id":     { "type": "string", "format": "uuid", "description": "Book where this event occurred." },
+    "scene_id":    { "type": "string", "format": "uuid" },
+    "timestamp":   { "type": "string", "format": "date-time" },
+    "promise_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Cross-book promise identifier. Consistent across all books in the series."
+    },
+    "cross_book_arc_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Optional arc ID grouping multiple series promises under a shared arc."
+    },
+    "promise_type": {
+      "type": "string",
+      "enum": ["series_thread", "overarching_mystery", "series_antagonist", "character_arc_continuation", "world_question"],
+      "description": "Promise category (series-scoped extension of core/promise.schema.json types)."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["opened", "progressed", "resolved", "broken"],
+      "description": "Current status of this cross-book promise."
+    },
+    "opened_book": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "description": "Book number where this promise was opened."
+    },
+    "must_resolve_by_book": {
+      "type": ["integer", "null"],
+      "minimum": 1,
+      "description": "Latest book number by which this promise must be resolved."
+    },
+    "description": {
+      "type": "string",
+      "description": "Short summary of the series promise (e.g. 'The shadowy organization behind the heist is teased across books 1–3')."
+    }
+  }
+}

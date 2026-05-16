@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/context_pack/provenance/v1",
+  "title": "Provenance",
+  "description": "Provenance record attached to every context pack and machine-generated artifact. Records source file hashes, schema version, run parameters, and agent ID so any artifact can be reproduced from inputs alone. Satisfies reproducibility requirement: same inputs + seed = bit-identical outputs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["generated_at", "agent_id", "view_schema_version", "source_hashes", "run_seed"],
+  "properties": {
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when the artifact was generated."
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "Agent that produced this artifact (e.g. writer_agent/v1.2.0)."
+    },
+    "agent_version": {
+      "type": "string",
+      "description": "Semver of the agent implementation."
+    },
+    "view_schema_version": {
+      "type": "string",
+      "description": "Schema version of the artifact format."
+    },
+    "run_seed": {
+      "type": "integer",
+      "description": "RNG seed for this pipeline run. Pinned at job start."
+    },
+    "source_hashes": {
+      "type": "object",
+      "description": "SHA-256 hashes of every source file that contributed to this artifact. Key = relative file path; value = hex digest. Enables exact reproduction.",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$",
+        "description": "SHA-256 hex digest."
+      }
+    },
+    "model_versions": {
+      "type": "object",
+      "description": "LLM model IDs used during this agent invocation. Key = model role (drafter, critic, reader); value = model ID string.",
+      "additionalProperties": { "type": "string" }
+    },
+    "profile_versions": {
+      "type": "object",
+      "description": "Profile IDs and versions in effect. Key = profile type (author, genre, audience, sensitivity, goal); value = '{profile_id}@{version}'.",
+      "additionalProperties": { "type": "string" }
+    },
+    "job_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Pipeline run job identifier."
+    },
+    "source_files": {
+      "type": "array",
+      "description": "Ordered list of source file paths that contributed to this artifact. Mirrors source_hashes keys for human readability.",
+      "items": { "type": "string" }
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/ledgers/intimacy_escalation_ledger/v1",
+  "title": "IntimacyEscalationLedger Event",
+  "description": "Append-only event log tracking intimacy milestones per character pair. Prevents 'first kiss' duplication, enforces escalation order, and enforces sex_scene_frequency constraints for erotica/high-heat genres. character_pair is a sorted tuple so it is canonical regardless of who is POV.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "book_id", "scene_id", "character_pair", "event_type", "heat_level", "timestamp"],
+  "properties": {
+    "event_id":     { "type": "string", "format": "uuid" },
+    "book_id":      { "type": "string", "format": "uuid" },
+    "scene_id":     { "type": "string", "format": "uuid" },
+    "timestamp":    { "type": "string", "format": "date-time" },
+    "character_pair": {
+      "type": "array",
+      "description": "Sorted tuple [char_id_a, char_id_b] (alphabetically sorted UUIDs). Canonical representation regardless of POV.",
+      "items": { "type": "string", "format": "uuid" },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "first_touch",
+        "first_charged_moment",
+        "first_kiss",
+        "first_explicit",
+        "escalation_peak",
+        "explicit_scene",
+        "post_explicit_emotional_beat",
+        "separation",
+        "reconciliation"
+      ],
+      "description": "Milestone type. first_touch through first_explicit must occur in order. explicit_scene tracks all sex scenes (used for frequency enforcement in erotica profile)."
+    },
+    "heat_level": {
+      "type": "string",
+      "enum": ["sweet", "sensual", "steamy", "erotic"],
+      "description": "Heat level of this event."
+    },
+    "description": {
+      "type": "string",
+      "description": "One-sentence summary of what happened (for dashboard display and duplication prevention)."
+    },
+    "chapter_number": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Denormalized chapter number for frequency/escalation queries."
+    },
+    "consent_present": {
+      "type": ["boolean", "null"],
+      "description": "For explicit events: was enthusiastic consent clearly established? Null for non-explicit events. Feeds consent_arc tracking."
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/ledgers/subplot_ledger/v1",
+  "title": "SubplotLedger Event",
+  "description": "Append-only event log for subplot lifecycle. Distinct from PromiseLedger (which tracks narrative promises); this ledger tracks subplots opened with resolution targets. Prevents subplots from being abandoned without resolution. Feeds Subplot section of Author Dashboard.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "book_id", "scene_id", "subplot_id", "subplot_type", "status", "timestamp"],
+  "properties": {
+    "event_id":   { "type": "string", "format": "uuid" },
+    "book_id":    { "type": "string", "format": "uuid" },
+    "scene_id":   { "type": "string", "format": "uuid", "description": "Scene where this subplot event occurred." },
+    "timestamp":  { "type": "string", "format": "date-time" },
+    "subplot_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique subplot identifier. Consistent across all events for the same subplot."
+    },
+    "subplot_type": {
+      "type": "string",
+      "enum": ["romantic", "professional", "family", "external", "antagonist", "thematic"],
+      "description": "Subplot category. Romantic subplots are tracked by IntimacyEscalationLedger in parallel."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["opened", "escalating", "complicating", "progressed", "resolved", "abandoned"],
+      "description": "'abandoned' is a hard fail for any subplot with priority >= 3."
+    },
+    "description": {
+      "type": "string",
+      "description": "Short description of the subplot (e.g. 'Protagonist's rift with her sister over the family business')."
+    },
+    "opened_at_scene": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Scene where this subplot was opened. Populated on the 'opened' event."
+    },
+    "target_resolution_scene": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Planned scene for resolution. Null if unscheduled. Convergence Controller checks for overdue subplots."
+    },
+    "resolution_scene": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Actual scene where resolved. Null until status = resolved."
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5,
+      "description": "Subplot importance. 5 = A-plot; 1 = background texture."
+    }
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/core/beat/v1",
+  "title": "Beat",
+  "description": "A single beat within a scene. The finest-grained structural unit. Beats have a typed function, a word count target, and optionally a speaker (for dialogue beats). Payoff/setup chains are tracked here.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "scene_id", "beat_type", "word_count_target"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique beat identifier."
+    },
+    "scene_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Parent scene identifier."
+    },
+    "beat_type": {
+      "type": "string",
+      "description": "Functional type of this beat. Universal values: action, dialogue, interiority, description, transition, revelation, confrontation, intimate_escalation. Genre modules may extend.",
+      "enum": [
+        "action",
+        "dialogue",
+        "interiority",
+        "description",
+        "transition",
+        "revelation",
+        "confrontation",
+        "intimate_escalation",
+        "setup",
+        "payoff"
+      ]
+    },
+    "word_count_target": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Target word count for this beat."
+    },
+    "speaker_character_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "For dialogue beats: which character is speaking. Null for non-dialogue beats."
+    },
+    "pov_character_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "POV character for this beat if it differs from the scene default."
+    },
+    "intensity": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Emotional/tension intensity of this beat (0.0 = flat, 1.0 = peak). Used by scene rhythm ledger."
+    },
+    "setup_for": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Beat ID this beat sets up (Chekhov linkage). Stub — expand during Phase 7 implementation."
+    },
+    "payoff_of": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Beat ID this beat pays off (Chekhov linkage). Stub — expand during Phase 7 implementation."
+    },
+    "expected_reader_response": {
+      "type": "string",
+      "description": "Intended reader emotional response. Used by Reader agent for evaluation. Stub — expand during Phase 8 implementation."
+    }
+  }
+}

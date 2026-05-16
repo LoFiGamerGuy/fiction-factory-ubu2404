@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/profiles/voice_profile/v1",
+  "title": "VoiceProfile",
+  "description": "Author voice profile. Derived from Bunko BUNKO-VOICE-PROFILE-SCHEMA-v0.1. All fields are measurable on output prose. Profiles are YAML on disk; this schema validates them after YAML load. See schemas/profiles section of IMPLEMENTATION_PLAN.md Phase 4 T4.1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["profile_id", "profile_name", "profile_version", "style_markers", "no_fly_words", "no_fly_patterns", "pacing_targets"],
+  "properties": {
+    "profile_id":      { "type": "string", "description": "Unique profile identifier." },
+    "profile_name":    { "type": "string", "description": "Human-readable name (e.g. 'default', 'alex-river-v1')." },
+    "profile_version": { "type": "string", "description": "Semantic version (e.g. '1.0.0'). Bumped on meaningful change." },
+    "series_id": {
+      "type": ["string", "null"],
+      "description": "Series this profile is scoped to. Null for universal profiles."
+    },
+    "style_markers": {
+      "type": "object",
+      "description": "Measurable voice axes. Maps to Bunko schema §3–11. Stub — enumerate all sub-fields during Phase 4 T4.1 implementation.",
+      "additionalProperties": false,
+      "properties": {
+        "sentence_length_histogram": {
+          "type": "object",
+          "description": "Target % of sentences per word-count bucket (1-5, 6-10, 11-20, 21-35, 36-50, 51+). Stub — expand during Phase 4.",
+          "additionalProperties": { "type": "number" }
+        },
+        "em_dash_rate_per_1000":    { "type": "number", "minimum": 0.0, "description": "Target em-dash rate." },
+        "em_dash_ceiling":          { "type": "number", "minimum": 0.0 },
+        "dialogue_ratio_target":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "interiority_pct_target":   { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "sensory_density_per_1k":   { "type": "number", "minimum": 0.0 },
+        "modality_ratios": {
+          "type": "object",
+          "description": "Target fraction of sensory references per modality (sight, sound, touch, smell, taste, proprioception).",
+          "additionalProperties": { "type": "number" }
+        },
+        "lexical_diversity_target":  { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "TTR/MTLD target." },
+        "hedge_word_ceilings":       { "type": "object", "description": "Per-hedge-word ceiling per 1000 words.", "additionalProperties": { "type": "number" } },
+        "filter_word_ceilings":      { "type": "object", "description": "Per-filter-word ceiling per 1000 words.", "additionalProperties": { "type": "number" } }
+      }
+    },
+    "no_fly_words": {
+      "type": "array",
+      "description": "Hard-banned words or multi-word phrases. Any occurrence = REJECT. See Bunko schema §4.",
+      "items": { "type": "string" }
+    },
+    "no_fly_patterns": {
+      "type": "array",
+      "description": "Regex-based forbidden constructions. See Bunko schema §12.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pattern", "severity", "category"],
+        "properties": {
+          "pattern":  { "type": "string", "description": "Regex pattern." },
+          "severity": { "type": "string", "enum": ["high", "medium", "low"], "description": "high=REJECT, medium=flag, low=warn." },
+          "category": { "type": "string", "description": "Pattern category (e.g. visceral_cliche, gaze_cliche, hedge_construction)." }
+        }
+      }
+    },
+    "register": {
+      "type": "object",
+      "description": "Tonal register settings.",
+      "additionalProperties": false,
+      "properties": {
+        "heat_level": { "type": "string", "enum": ["sweet", "sensual", "steamy", "erotic"] },
+        "tonal_mode": { "type": "string", "description": "e.g. warm_commercial, literary_precise, funny_and_light. Stub — enumerate during Phase 4." }
+      }
+    },
+    "pacing_targets": {
+      "type": "object",
+      "description": "Per-scene-type pacing targets. Mirrors Bunko schema §8. Keys are scene_type values.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "avg_sentence_length":      { "type": "number" },
+          "avg_paragraph_length_words": { "type": "number" },
+          "dialogue_pct":             { "type": "number" },
+          "sensory_density_per_1000": { "type": "number" },
+          "interiority_pct":          { "type": "number" }
+        }
+      }
+    },
+    "exemplar_pool": {
+      "type": "array",
+      "description": "Reference to computed voice-axis measurements derived from corpus (no prose retained). Stub — expand during Phase 6 Voice Extraction Pipeline.",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "enforcement": {
+      "type": "object",
+      "description": "Conformance thresholds and dimension weights. Mirrors Bunko schema §13. Stub — expand during Phase 4.",
+      "additionalProperties": true
+    },
+    "calibration_history": {
+      "type": "array",
+      "description": "Ordered log of recalibration rounds. Append-only. Mirrors Bunko schema §14.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["round", "date", "trigger"],
+        "properties": {
+          "round":         { "type": "integer", "minimum": 1 },
+          "date":          { "type": "string", "format": "date" },
+          "trigger":       { "type": "string" },
+          "delta_summary": { "type": "string" }
+        }
+      }
+    }
+  }
+}

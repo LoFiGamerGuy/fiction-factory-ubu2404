@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/core/promise/v1",
+  "title": "Promise",
+  "description": "A narrative promise opened in one scene and resolved in another. Promise Ledger entries are append-only. No GO at chapter level if any overdue promises exist. See also promise_ledger.schema.json for the event log.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "type", "opened_in_scene", "status", "priority", "description"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique promise identifier."
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "foreshadowing",
+        "chekhov_object",
+        "character_question",
+        "mystery_thread",
+        "emotional_debt",
+        "thematic_setup",
+        "romantic_tension",
+        "world_question",
+        "series_thread"
+      ],
+      "description": "Promise category. series_thread promises span books; tracked in series_promise_ledger."
+    },
+    "opened_in_scene": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Scene ID where this promise was established."
+    },
+    "opened_by": {
+      "type": "string",
+      "description": "Agent ID that created this promise (e.g. outliner, writer_agent)."
+    },
+    "target_resolution_scene": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Scene ID where this promise is planned to resolve. Null if unscheduled."
+    },
+    "must_resolve_by": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Latest scene ID by which this promise must be resolved. Convergence Controller blocks GO if overdue."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["open", "progressed", "resolved", "broken"],
+      "description": "Current status. 'broken' is a hard fail logged to the issue report."
+    },
+    "resolved_in_scene": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Scene ID where this promise was resolved. Null while status != resolved."
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5,
+      "description": "Narrative importance. 5 = central arc promise; 1 = minor texture detail."
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable summary of the promise (e.g. 'The locked box in Chapter 2 must be opened before the climax')."
+    },
+    "acceptable_resolutions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Short descriptions of acceptable resolution forms. Used by Convergence Controller to evaluate candidate resolutions."
+    }
+  }
+}

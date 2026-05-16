@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/core/chapter/v1",
+  "title": "Chapter",
+  "description": "A chapter within a book. Aggregates scenes; carries structural metadata about its position and role in the act.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "book_id", "number", "act", "word_count_target", "scenes"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique chapter identifier."
+    },
+    "book_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Parent book identifier."
+    },
+    "number": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Chapter ordinal within the book (1-indexed)."
+    },
+    "title": {
+      "type": "string",
+      "description": "Optional chapter title or working label."
+    },
+    "act": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5,
+      "description": "Act number this chapter belongs to (1–3 for three-act; up to 5 for five-act)."
+    },
+    "word_count_target": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Target word count for all scenes in this chapter combined."
+    },
+    "scenes": {
+      "type": "array",
+      "description": "Ordered list of scene IDs belonging to this chapter.",
+      "items": { "type": "string", "format": "uuid" },
+      "minItems": 1
+    },
+    "pov_character_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Default POV character for this chapter. Individual scenes may override. Stub — expand during Phase 7 implementation."
+    },
+    "hook": {
+      "type": "string",
+      "description": "Opening-hook description for outliner/spec. Stub — expand during Phase 7 implementation."
+    },
+    "cliffhanger_required": {
+      "type": "boolean",
+      "description": "Whether this chapter must end on a cliffhanger or chapter-turn hook. Driven by genre_profile.structural_conventions.",
+      "default": false
+    },
+    "arc_function": {
+      "type": "string",
+      "description": "The structural role of this chapter in the overall arc (e.g. inciting_incident, dark_night, climax). Stub — expand during Phase 7 implementation."
+    }
+  }
+}

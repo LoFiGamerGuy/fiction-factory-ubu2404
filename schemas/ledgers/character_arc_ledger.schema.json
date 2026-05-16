@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/ledgers/character_arc_ledger/v1",
+  "title": "CharacterArcLedger Event",
+  "description": "Append-only arc state snapshot per character per finalized scene. Prevents writing later chapters without knowing arc position. Relationship states track each pair's current dynamic. Feeds Character Arc Ledger section of the Author Dashboard.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "book_id", "scene_id", "character_id", "timestamp", "arc_phase", "wound_state", "belief_state"],
+  "properties": {
+    "event_id":      { "type": "string", "format": "uuid" },
+    "book_id":       { "type": "string", "format": "uuid" },
+    "scene_id":      { "type": "string", "format": "uuid", "description": "Scene where this arc state was recorded." },
+    "character_id":  { "type": "string", "format": "uuid" },
+    "timestamp":     { "type": "string", "format": "date-time" },
+    "arc_phase": {
+      "type": "string",
+      "enum": ["not_started", "opening", "wound_open", "processing", "wound_healing", "resolved"],
+      "description": "Character's arc phase after this scene."
+    },
+    "wound_state": {
+      "type": "string",
+      "description": "Short description of wound state (e.g. 'believes love equals abandonment; wound fresh')."
+    },
+    "belief_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["current", "true"],
+      "properties": {
+        "current": { "type": "string" },
+        "true":    { "type": "string" }
+      }
+    },
+    "relationship_states": {
+      "type": "object",
+      "description": "Map of other_character_id → relationship status snapshot after this scene.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Relationship status (e.g. strangers, hostile, tense, allies, romantic_tension, committed)."
+          },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    "arc_beat_delivered": {
+      "type": ["string", "null"],
+      "description": "If this scene delivered a required arc beat, name it here (e.g. 'wound_revealed'). Null if no arc beat delivered."
+    }
+  }
+}

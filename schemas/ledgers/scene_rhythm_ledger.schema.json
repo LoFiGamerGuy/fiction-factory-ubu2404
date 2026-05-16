@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/ledgers/scene_rhythm_ledger/v1",
+  "title": "SceneRhythmLedger Event",
+  "description": "Append-only log of scene type sequence. Maintains a rolling window of the last 8–10 scene types to prevent rhythm monotony (e.g. 5 consecutive interiority scenes). Used by Outliner to enforce pacing variety. Rolling window is computed by LedgerManager as a view over this log.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "book_id", "scene_id", "scene_type", "timestamp"],
+  "properties": {
+    "event_id":   { "type": "string", "format": "uuid" },
+    "book_id":    { "type": "string", "format": "uuid" },
+    "scene_id":   { "type": "string", "format": "uuid" },
+    "timestamp":  { "type": "string", "format": "date-time" },
+    "chapter_number": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Denormalized chapter number for window queries."
+    },
+    "scene_type": {
+      "type": "string",
+      "enum": [
+        "action",
+        "dialogue",
+        "interiority",
+        "description",
+        "transition",
+        "intimate_escalation",
+        "reveal",
+        "confrontation",
+        "aftermath",
+        "comic_relief"
+      ],
+      "description": "Scene type classification. Genre modules may extend. Used for rolling-window monotony detection."
+    },
+    "rolling_window": {
+      "type": "array",
+      "description": "Snapshot of the last 8–10 scene types at the time this event was appended (computed by LedgerManager, stored for dashboard display without re-query).",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "maxItems": 10
+    },
+    "rhythm_alert": {
+      "type": "boolean",
+      "description": "True if LedgerManager detected a monotony violation in the rolling window at the time of this event.",
+      "default": false
+    },
+    "rhythm_alert_reason": {
+      "type": ["string", "null"],
+      "description": "Human-readable reason for the rhythm alert (e.g. '4 consecutive interiority scenes'). Null if no alert."
+    }
+  }
+}

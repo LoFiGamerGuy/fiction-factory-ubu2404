@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/core/character/v1",
+  "title": "Character",
+  "description": "A character entity in the continuity bible. Tracks identity, current arc phase, psychological wound/belief states, and relationship states with other characters. Arc and belief states are updated by the Character Arc Ledger after each finalized scene.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name", "arc_phase", "wound_state", "belief_state"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique character identifier."
+    },
+    "name": {
+      "type": "string",
+      "description": "Primary name (or pen-name alias used in manuscript)."
+    },
+    "aliases": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Other names or nicknames this character may be referred to by."
+    },
+    "arc_phase": {
+      "type": "string",
+      "enum": ["opening", "wound_open", "processing", "wound_healing", "resolved"],
+      "description": "Current position in the character arc. Updated by Character Arc Ledger after each scene."
+    },
+    "wound_state": {
+      "type": "string",
+      "description": "Short description of the character's current psychological wound. Evolves across arc phases. Stub — formalize wound taxonomy during Phase 7 implementation."
+    },
+    "belief_state": {
+      "type": "object",
+      "description": "Current vs. true core beliefs (the gap drives internal conflict).",
+      "additionalProperties": false,
+      "required": ["current", "true"],
+      "properties": {
+        "current": {
+          "type": "string",
+          "description": "What the character currently believes about themselves/the world (may be false)."
+        },
+        "true": {
+          "type": "string",
+          "description": "The belief the character needs to reach by arc resolution."
+        }
+      }
+    },
+    "relationship_states": {
+      "type": "object",
+      "description": "Map of other_character_id → relationship status. Updated by Character Arc Ledger. Stub — formalize relationship taxonomy during Phase 7 implementation.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Current relationship status (e.g. strangers, hostile, tense, allies, romantic_tension, committed)."
+          },
+          "last_updated_scene": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Scene ID of the most recent state change."
+          }
+        }
+      }
+    },
+    "physical": {
+      "type": "object",
+      "description": "Physical description anchors for continuity. Stub — expand during Phase 4 implementation.",
+      "additionalProperties": true
+    },
+    "voice": {
+      "type": "object",
+      "description": "Dialogue voice fingerprint for this character (feeds per_character_voice_check). Stub — expand during Phase 6 implementation.",
+      "additionalProperties": true
+    },
+    "taboos": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Character-level hard constraints (things this character would never do). Violation → RE-PLAN."
+    }
+  }
+}

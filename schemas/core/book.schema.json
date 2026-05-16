@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/core/book/v1",
+  "title": "Book",
+  "description": "Top-level narrative artifact composed under a profile stack. Validity requires word count within tolerance, all scenes committed, Promise Ledger zero overdue, and Sensitivity Profile compliance verified.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "genre", "heat_level", "word_count_target", "act_structure", "profile_refs", "seed_value"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique book identifier."
+    },
+    "title": {
+      "type": "string",
+      "description": "Working or final title."
+    },
+    "seed_value": {
+      "type": "integer",
+      "description": "RNG seed pinned at run start. Same seed + same inputs = bit-identical outputs."
+    },
+    "genre": {
+      "type": "string",
+      "description": "Primary genre identifier (e.g. romance, thriller). Resolved from genre_profile."
+    },
+    "heat_level": {
+      "type": "string",
+      "enum": ["sweet", "sensual", "steamy", "erotic"],
+      "description": "Heat level ceiling for this book; must not exceed sensitivity_profile ceiling."
+    },
+    "word_count_target": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Total target word count for the finished manuscript."
+    },
+    "act_structure": {
+      "type": "string",
+      "enum": ["three_act", "four_act", "five_act", "hero_journey", "save_the_cat"],
+      "description": "Structural template governing chapter/scene slot allocation."
+    },
+    "chapters": {
+      "type": "array",
+      "description": "Ordered list of chapter IDs. Chapters are separately schema-validated.",
+      "items": { "type": "string", "format": "uuid" }
+    },
+    "profile_refs": {
+      "type": "object",
+      "description": "IDs of the resolved profile pentad used for this book.",
+      "additionalProperties": false,
+      "required": ["author", "genre", "audience", "sensitivity", "goal"],
+      "properties": {
+        "author":      { "type": "string", "description": "Author profile ID." },
+        "genre":       { "type": "string", "description": "Genre profile ID." },
+        "audience":    { "type": "string", "description": "Audience profile ID." },
+        "sensitivity": { "type": "string", "description": "Sensitivity profile ID (sacred)." },
+        "goal":        { "type": "string", "description": "Goal profile ID." }
+      }
+    },
+    "concept_seed": {
+      "type": "string",
+      "description": "Human-authored high-level concept (the spec intake premise). Stub — expand during Phase 6 implementation."
+    },
+    "series_position": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Position within series (1 = standalone or book 1). Stub — expand during Phase 9 implementation."
+    },
+    "state_refs": {
+      "type": "object",
+      "description": "References to runtime state artifacts for this book. Stub — expand during Phase 6 implementation.",
+      "additionalProperties": false,
+      "properties": {
+        "bible_ref":                    { "type": "string" },
+        "promise_ledger_ref":           { "type": "string" },
+        "manuscript_ref":               { "type": "string" },
+        "decision_log_ref":             { "type": "string" },
+        "axis_registry_snapshot_ref":   { "type": "string" }
+      }
+    }
+  }
+}

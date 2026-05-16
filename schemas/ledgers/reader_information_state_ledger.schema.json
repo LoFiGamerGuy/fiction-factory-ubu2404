@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/ledgers/reader_information_state_ledger/v1",
+  "title": "ReaderInformationStateLedger Event",
+  "description": "Append-only event tracking what the reader knows vs. what each character knows at each scene. Enables dramatic irony management, suspense calibration, and revelation pacing. Feeds Reader Information State section of Author Dashboard.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "book_id", "scene_id", "revelation_type", "content_summary", "known_by_reader", "timestamp"],
+  "properties": {
+    "event_id":          { "type": "string", "format": "uuid" },
+    "book_id":           { "type": "string", "format": "uuid" },
+    "scene_id":          { "type": "string", "format": "uuid" },
+    "timestamp":         { "type": "string", "format": "date-time" },
+    "fact_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Identifier for the fact/revelation being tracked. Allows grouping related events across scenes."
+    },
+    "revelation_type": {
+      "type": "string",
+      "enum": [
+        "reader_learns",
+        "character_learns",
+        "dramatic_irony_created",
+        "dramatic_irony_resolved",
+        "mystery_seeded",
+        "mystery_resolved"
+      ],
+      "description": "Type of information state change."
+    },
+    "content_summary": {
+      "type": "string",
+      "description": "Short summary of the fact or revelation (e.g. 'Reader learns the antagonist is the protagonist's brother')."
+    },
+    "known_by_reader": {
+      "type": "boolean",
+      "description": "True if the reader now knows this fact after this scene."
+    },
+    "known_by_characters": {
+      "type": "array",
+      "items": { "type": "string", "format": "uuid" },
+      "description": "Character IDs that know this fact after this scene."
+    },
+    "irony_type": {
+      "type": "string",
+      "enum": ["dramatic", "tragic", "situational", "none"],
+      "description": "If a gap exists between reader knowledge and character knowledge, which irony form does it create."
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional context for the dashboard or Outliner planning (e.g. 'Must resolve before chapter 15 or reader feels cheated')."
+    }
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/ledgers/book_metrics_ledger/v1",
+  "title": "BookMetricsLedger Event",
+  "description": "Append-only stylometric snapshot appended after each finalized scene. QualityAgent evaluates each scene's contribution to running totals, not local absolute values. Provides budget_remaining for pacing enforcement. All metrics are cumulative; per-scene snapshots enable trajectory charting in the Author Dashboard.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "book_id", "chapter_id", "scene_id", "timestamp", "metrics", "running_totals"],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique event identifier."
+    },
+    "book_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "chapter_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "scene_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "metrics": {
+      "type": "object",
+      "description": "Per-scene metric snapshot for this scene only.",
+      "additionalProperties": false,
+      "required": ["word_count", "interiority_pct", "dialogue_ratio", "exposition_pct", "sensory_density_per_1k", "em_dash_density", "sentence_length_avg", "ai_tell_count", "no_fly_violations"],
+      "properties": {
+        "word_count":                { "type": "integer", "minimum": 0 },
+        "interiority_pct":           { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Fraction of scene words classified as interiority." },
+        "dialogue_ratio":            { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Fraction of scene words in dialogue." },
+        "exposition_pct":            { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "action_pct":                { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "sensory_density_per_1k":    { "type": "number", "minimum": 0.0, "description": "Sensory references per 1000 words." },
+        "em_dash_density":           { "type": "number", "minimum": 0.0, "description": "Em-dashes per 1000 words." },
+        "sentence_length_avg":       { "type": "number", "minimum": 0.0, "description": "Mean words per sentence." },
+        "ai_tell_count":             { "type": "integer", "minimum": 0, "description": "Count of AI-tell patterns detected by NoFlyScanner." },
+        "no_fly_violations":         { "type": "integer", "minimum": 0 },
+        "heat_curve_position":       { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Heat level for this scene (0.0=sweet, 1.0=erotic peak). Stub — expand during Phase 7 implementation." },
+        "sex_scene_flag":            { "type": "boolean", "description": "Whether this scene contains an explicit sex scene." }
+      }
+    },
+    "running_totals": {
+      "type": "object",
+      "description": "Cumulative book-level totals after this scene is finalized. Used by QualityAgent and Author Dashboard.",
+      "additionalProperties": false,
+      "required": ["word_count_total", "sex_scene_count"],
+      "properties": {
+        "word_count_total":          { "type": "integer", "minimum": 0 },
+        "sex_scene_count":           { "type": "integer", "minimum": 0 },
+        "ai_tell_count_total":       { "type": "integer", "minimum": 0 },
+        "no_fly_violations_total":   { "type": "integer", "minimum": 0 },
+        "interiority_pct_running":   { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Weighted running average across all scenes so far." },
+        "dialogue_ratio_running":    { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "exposition_pct_running":    { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+      }
+    },
+    "budget_remaining": {
+      "type": "object",
+      "description": "Word-count budget remaining by act/chapter. Stub — expand during Phase 3 implementation.",
+      "additionalProperties": true
+    },
+    "character_metrics": {
+      "type": "object",
+      "description": "Per-character dialogue metrics keyed by character_id. Requires BookNLP speaker attribution as upstream prerequisite. Populated after Phase 8 (BookNLP integration). All 12 metrics are deterministically computable with no LLM calls. Research basis: ACL 2017 Stylome Classification, ACL 2019 Fictional Voices, War and Peace DH study, Portrayal system (ACM DIS 2023).",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "dialogue_word_count":          { "type": "integer",  "minimum": 0,    "description": "Total attributed dialogue words for this character in this scene." },
+          "mtld":                         { "type": "number",   "minimum": 0.0,  "description": "Measure of Textual Lexical Diversity (lexicalrichness). Length-corrected vocabulary richness. High = wide vocabulary; low = repetitive." },
+          "avg_word_length_chars":        { "type": "number",   "minimum": 0.0,  "description": "Mean characters per word. High = Latinate/polysyllabic; low = vernacular/monosyllabic." },
+          "question_rate":                { "type": "number",   "minimum": 0.0, "maximum": 1.0, "description": "Interrogative sentences / total sentences (spaCy + regex). High = curious/uncertain/interrogating." },
+          "exclamatory_rate":             { "type": "number",   "minimum": 0.0, "maximum": 1.0, "description": "Exclamatory sentences / total sentences. High = emotionally expressive." },
+          "imperative_rate":              { "type": "number",   "minimum": 0.0, "maximum": 1.0, "description": "Imperative-root sentences / total sentences (spaCy dep parse). High = commanding." },
+          "first_person_pronoun_rate":    { "type": "number",   "minimum": 0.0, "maximum": 1.0, "description": "I/me/my/mine/myself count / total words. High = ego-oriented; low = other-directed." },
+          "second_person_pronoun_rate":   { "type": "number",   "minimum": 0.0, "maximum": 1.0, "description": "You/your/yours/yourself count / total words. High = addressing/commanding/seducing." },
+          "modal_verb_rate":              { "type": "number",   "minimum": 0.0, "maximum": 1.0, "description": "Modal auxiliary count / total words (spaCy tag MD). High = hedging/deferential; low = assertive." },
+          "sentiment_mean":               { "type": "number",   "minimum": -1.0, "maximum": 1.0, "description": "Mean VADER compound sentiment across all utterances. Negative = brooding/bitter; positive = optimistic." },
+          "sentiment_std":                { "type": "number",   "minimum": 0.0,  "description": "Std deviation of per-utterance VADER compound scores. High = emotionally volatile." },
+          "fk_grade":                     { "type": "number",                    "description": "Flesch-Kincaid grade level (textstat). Captures syllabic complexity beyond raw sentence length." },
+          "function_word_vector":         { "type": "array", "items": { "type": "number" }, "description": "Normalized frequency vector of top-150 English function words (faststylometry / Burrows' Delta basis). Stored for pairwise delta-distance computation in Author Dashboard CharacterVoiceChart. Most validated single stylometric method." }
+        }
+      }
+    }
+  }
+}

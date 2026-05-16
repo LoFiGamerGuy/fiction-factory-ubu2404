@@ -3,3 +3,13 @@
 __pycache__/
 .venv/
 .env
+data/ledgers/
+data/cost_log.jsonl
+*.egg-info/
+dist/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+node_modules/

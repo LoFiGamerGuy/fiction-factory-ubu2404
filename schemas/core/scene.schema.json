@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/core/scene/v1",
+  "title": "Scene",
+  "description": "A scene within a chapter. The atomic unit of generation. Each scene has an assigned function, beat sequence, heat level, and a lifecycle state managed by the LangGraph state machine.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "chapter_id", "book_id", "scene_function", "lifecycle_state", "word_count_target"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique scene identifier."
+    },
+    "chapter_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Parent chapter identifier."
+    },
+    "book_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Parent book identifier (denormalized for ledger queries)."
+    },
+    "scene_number": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Ordinal position within the chapter (1-indexed)."
+    },
+    "scene_function": {
+      "type": "string",
+      "description": "Genre-specific scene function from the genre_profile.scene_function_vocabulary (e.g. meet_cute, black_moment, intimate_escalation, revelation, action, transition). Genre modules extend this enum."
+    },
+    "lifecycle_state": {
+      "type": "string",
+      "enum": ["Unspecced", "Specced", "DirtyDraft", "NeedsReview", "Approved", "Final"],
+      "description": "Current state in the LangGraph scene lifecycle state machine. Unspecced → Specced → DirtyDraft → NeedsReview → Approved | RE-PLAN → Final."
+    },
+    "pov_character_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "POV character for this scene. Must be in character_ids."
+    },
+    "character_ids": {
+      "type": "array",
+      "description": "IDs of all characters present in this scene.",
+      "items": { "type": "string", "format": "uuid" }
+    },
+    "beat_sequence": {
+      "type": "array",
+      "description": "Ordered list of beat IDs within this scene.",
+      "items": { "type": "string", "format": "uuid" }
+    },
+    "word_count_target": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Target word count for this scene."
+    },
+    "heat_level": {
+      "type": "string",
+      "enum": ["sweet", "sensual", "steamy", "erotic"],
+      "description": "Heat level for this scene; must not exceed book heat_level or sensitivity_profile ceiling."
+    },
+    "goal": {
+      "type": "string",
+      "description": "What the POV character wants in this scene. Stub — expand during Phase 7 implementation."
+    },
+    "conflict": {
+      "type": "string",
+      "description": "What opposes the POV character's goal. Stub — expand during Phase 7 implementation."
+    },
+    "outcome": {
+      "type": "string",
+      "description": "How the conflict resolves (yes/no/yes-but/no-and). Stub — expand during Phase 7 implementation."
+    },
+    "state_delta": {
+      "type": "object",
+      "description": "Changes this scene commits to the continuity bible (character states, ledger events). Stub — expand during Phase 7 implementation.",
+      "additionalProperties": true
+    },
+    "x-act": {
+      "type": "integer",
+      "description": "Denormalized act number for ledger queries and context pack injection."
+    }
+  }
+}

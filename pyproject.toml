@@ -1,0 +1,94 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "fiction-factory"
+version = "0.1.0"
+description = "Autonomous AI fiction-novel-writing pipeline"
+requires-python = ">=3.12"
+dependencies = [
+    # LLM + schema enforcement
+    "anthropic>=0.40",
+    "openai>=1.50",
+    "instructor>=1.5",
+    "pydantic>=2.7",
+    "jsonschema>=4.23",
+    "datamodel-code-generator>=0.25",
+    "pyyaml>=6.0",
+    # Orchestration + state machine
+    "langgraph>=1.0",
+    # Memory
+    "mem0ai",
+    # ML (V1 scope)
+    "scikit-learn>=1.5",
+    "scipy>=1.14",
+    "sentence-transformers>=3.0",
+    "numpy>=1.26",
+    # Character metrics — all deterministic, no LLM calls (SYN-013)
+    "spacy>=3.7",
+    "nltk>=3.9",
+    "lexicalrichness>=0.5",
+    "textstat>=0.7",
+    "vaderSentiment>=3.3",
+    "faststylometry",
+    # API server (Phase 13 — Author Dashboard)
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sse-starlette>=2.1",
+    # Utilities
+    "python-dotenv>=1.0",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-cov>=5.0",
+    "mypy>=1.11",
+    "ruff>=0.7",
+    "pre-commit>=4.0",
+    "deepeval",
+]
+# Install separately (may require cloning): booknlp, roma-dspy
+
+[project.scripts]
+fiction-factory = "pipeline.orchestrator:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pipeline*", "agents*", "api*", "scripts*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --cov=pipeline --cov=agents --cov-report=term-missing"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+exclude = [
+    "pipeline/schemas/universal/",
+    "dashboard/",
+    "\\.workspace/",
+    "\\.venv/",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "ANN"]
+"scripts/**" = ["T20"]
+
+[tool.coverage.run]
+source = ["pipeline", "agents"]
+omit = ["pipeline/schemas/universal/*", "tests/*"]

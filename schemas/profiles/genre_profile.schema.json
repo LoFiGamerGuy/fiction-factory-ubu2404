@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/profiles/genre_profile/v1",
+  "title": "GenreProfile",
+  "description": "Genre module interface. Defines the vocabulary of scene functions, ontology extensions, quality gates, and reader contract specific to one genre. All genre-specific parameters are data here; code is the universal engine. See IMPLEMENTATION_PLAN.md Phase 4 T4.2.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["genre_id", "genre_name", "schema_version", "scene_function_vocabulary", "quality_gates", "reader_contract"],
+  "properties": {
+    "genre_id":       { "type": "string", "description": "Unique genre module identifier (e.g. romance_module_v1)." },
+    "genre_name":     { "type": "string", "description": "Human-readable name." },
+    "schema_version": { "type": "string", "description": "Schema version this profile was authored against." },
+    "parent_genre": {
+      "type": ["string", "null"],
+      "description": "If this is a subtype module (e.g. erotica extends romance), the parent genre_id. Null for top-level genres."
+    },
+    "scene_function_vocabulary": {
+      "type": "array",
+      "description": "Valid scene_function values for this genre. Extends the universal scene_function enum in scene.schema.json.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["function_id", "description"],
+        "properties": {
+          "function_id":  { "type": "string" },
+          "description":  { "type": "string" },
+          "required":     { "type": "boolean", "description": "If true, at least one scene with this function is required for a valid book.", "default": false }
+        }
+      }
+    },
+    "ontology_extensions": {
+      "type": "object",
+      "description": "Genre-specific fields that extend the Universal Core ontology (e.g. romance adds heat_level, consent_arc; thriller adds knowledge_state, evidence_objects). Stub — enumerate per genre during Phase 5 implementation.",
+      "additionalProperties": true
+    },
+    "structural_conventions": {
+      "type": "object",
+      "description": "Structural constraints for books in this genre. Stub — expand during Phase 5.",
+      "additionalProperties": false,
+      "properties": {
+        "word_count_range":    { "type": "object", "properties": { "min": { "type": "integer" }, "max": { "type": "integer" } } },
+        "chapter_count_range": { "type": "object", "properties": { "min": { "type": "integer" }, "max": { "type": "integer" } } },
+        "allowed_act_structures": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "quality_gates": {
+      "type": "array",
+      "description": "Genre-specific quality criteria applied by QualityAgent. Each gate is a named check with a threshold.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gate_id", "description", "threshold", "threshold_type"],
+        "properties": {
+          "gate_id":        { "type": "string" },
+          "description":    { "type": "string" },
+          "threshold":      { "type": "number" },
+          "threshold_type": { "type": "string", "enum": ["min", "max", "target"], "description": "Whether the metric must be ≥, ≤, or near the threshold." },
+          "sacred":         { "type": "boolean", "description": "If true, cannot be relaxed on FORCE-RESOLVE.", "default": false }
+        }
+      }
+    },
+    "self_audit_rubric": {
+      "type": "array",
+      "description": "LLM-evaluated rubric items for genre-specific craft (e.g. 'HEA/HFN emotionally earned', 'Tension arc maintained'). Stub — enumerate per genre during Phase 5 implementation.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["rubric_id", "question", "weight"],
+        "properties": {
+          "rubric_id": { "type": "string" },
+          "question":  { "type": "string", "description": "Yes/no or scored question for the self-audit LLM." },
+          "weight":    { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+        }
+      }
+    },
+    "reader_contract": {
+      "type": "object",
+      "description": "What readers of this genre implicitly expect. Used by Reader agent for satisfaction evaluation.",
+      "additionalProperties": false,
+      "properties": {
+        "required_satisfactions": { "type": "array", "items": { "type": "string" }, "description": "Things that must happen for reader satisfaction (e.g. 'HEA or HFN for romance')." },
+        "forbidden_disappointments": { "type": "array", "items": { "type": "string" }, "description": "Things that guarantee DNF or negative reviews." },
+        "dnf_triggers": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

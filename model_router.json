@@ -1,0 +1,33 @@
+{
+  "_note": "Default tier is 'test'. Promote to 'production' in Phase 14 only — see DEC-000-9.",
+  "model_tier": "test",
+  "tiers": {
+    "test": {
+      "drafter": "claude-haiku-4-5-20251001",
+      "editor": "claude-haiku-4-5-20251001",
+      "critic": "gpt-4.1-mini",
+      "mechanical_critic": "claude-haiku-4-5-20251001",
+      "local": "phi3.5"
+    },
+    "production": {
+      "drafter": "claude-sonnet-4-6",
+      "editor": "claude-sonnet-4-6",
+      "critic": "claude-opus-4-7",
+      "mechanical_critic": "claude-haiku-4-5-20251001",
+      "local": "phi3.5"
+    }
+  },
+  "providers": {
+    "anthropic": {
+      "models": ["claude-haiku-4-5-20251001", "claude-sonnet-4-6", "claude-opus-4-7"]
+    },
+    "openai": {
+      "models": ["gpt-4.1-mini"]
+    },
+    "ollama": {
+      "base_url_env": "OLLAMA_HOST",
+      "base_url_default": "http://localhost:11434",
+      "models": ["phi3.5"]
+    }
+  }
+}

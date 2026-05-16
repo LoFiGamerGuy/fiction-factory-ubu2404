@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/profiles/romance_module/v1",
+  "title": "RomanceModule",
+  "description": "Romance Module v1.0 profile. Extends genre_profile.schema.json with romance-specific fields per MBSE Craft Reviews Acceptance Plan of Record §2.1–2.2. Erotica/high-heat is a subtype: set heat_level=erotic and erotica_config fields. All romance books must reach HEA or HFN by final scene.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["genre_id", "HEA_required", "HFN_allowed", "heat_level", "consent_arc_required", "tropes_activated"],
+  "properties": {
+    "genre_id": {
+      "type": "string",
+      "description": "Must be 'romance_module_v1' or a subtype identifier."
+    },
+    "HEA_required": {
+      "type": "boolean",
+      "description": "Happily Ever After ending required. True for standard romance. Set false only if HFN_allowed=true (series book that defers HEA)."
+    },
+    "HFN_allowed": {
+      "type": "boolean",
+      "description": "Happily For Now acceptable as book-level resolution (series position > 1). If both HEA_required and HFN_allowed are false this is an invalid config."
+    },
+    "heat_level": {
+      "type": "string",
+      "enum": ["sweet", "sensual", "steamy", "erotic"],
+      "description": "Heat ceiling for this romance module instance. Must not exceed sensitivity_profile.heat_ceiling."
+    },
+    "tonal_mode": {
+      "type": "string",
+      "description": "Tone for this romance (e.g. warm_commercial, funny_and_light, angsty_emotional, dark_and_intense). Controls pacing target selection from voice_profile.",
+      "enum": ["warm_commercial", "funny_and_light", "angsty_emotional", "dark_and_intense", "grounded_literary"]
+    },
+    "consent_arc_required": {
+      "type": "boolean",
+      "description": "Enthusiastic consent arc required for all explicit scenes. Sacred — cannot be set false by Goal profile.",
+      "default": true
+    },
+    "sex_scene_spec": {
+      "type": "object",
+      "description": "Sex scene requirements. Required when heat_level >= sensual.",
+      "additionalProperties": false,
+      "properties": {
+        "first_sex_scene_by_chapter": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Chapter by which the first sex scene must appear. Null = no constraint. For erotica: typically chapter 2."
+        },
+        "frequency_min_per_n_chapters": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Minimum sex scene frequency (1 per N chapters). For erotica: typically 1 per 3 chapters."
+        },
+        "escalation_enforced": {
+          "type": "boolean",
+          "description": "If true, no two adjacent explicit scenes may repeat the same beat type (IntimacyEscalationLedger enforces).",
+          "default": true
+        },
+        "interiority_budget_pct_max": {
+          "type": ["number", "null"],
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Max interiority fraction in explicit scenes. For erotica: 0.20."
+        }
+      }
+    },
+    "heat_curve": {
+      "type": "object",
+      "description": "Heat escalation curve specification. Stub — formalize curve shape taxonomy during Phase 5 T5.2 implementation.",
+      "additionalProperties": false,
+      "properties": {
+        "shape": {
+          "type": "string",
+          "enum": ["slow_burn", "medium_burn", "fast_burn", "steep_erotica"],
+          "description": "Overall heat escalation shape. 'steep_erotica' requires first explicit scene by chapter 2."
+        },
+        "peak_act": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3,
+          "description": "Act in which heat curve peaks."
+        }
+      }
+    },
+    "tropes_activated": {
+      "type": "array",
+      "description": "List of romance tropes active for this book. Each activated trope creates required beats in TropeCommitmentLedger.",
+      "items": {
+        "type": "string",
+        "description": "Trope ID from genre_profile.trope_library (e.g. enemies_to_lovers, forced_proximity, second_chance, fake_dating, grumpy_sunshine)."
+      }
+    },
+    "no_fly_additions": {
+      "type": "array",
+      "description": "Romance-module-specific additions to the voice_profile no_fly_words list (e.g. genre clichés).",
+      "items": { "type": "string" }
+    },
+    "meet_cute_required": {
+      "type": "boolean",
+      "description": "Whether a meet-cute scene is required (standard romance: true).",
+      "default": true
+    },
+    "grand_gesture_required": {
+      "type": "boolean",
+      "description": "Whether a grand gesture (public or private) is required before HEA/HFN.",
+      "default": true
+    },
+    "power_dynamic_arc": {
+      "type": ["string", "null"],
+      "description": "Optional power dynamic type (e.g. boss_employee, age_gap, class_difference). When set, creates a required arc beat to resolve or contextualize the dynamic before HEA. Stub — expand during Phase 5 T5.2."
+    }
+  }
+}

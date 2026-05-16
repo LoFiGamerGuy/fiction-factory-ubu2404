@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/ledgers/trope_commitment_ledger/v1",
+  "title": "TropeCommitmentLedger Event",
+  "description": "Append-only log of genre trope commitments. When a trope is activated (e.g. enemies-to-lovers), it creates required payoff beats. This ledger tracks which beats have been delivered and flags overdue ones. Trope library is defined per genre_profile.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "book_id", "scene_id", "trope_id", "trope_name", "status", "timestamp"],
+  "properties": {
+    "event_id":    { "type": "string", "format": "uuid" },
+    "book_id":     { "type": "string", "format": "uuid" },
+    "scene_id":    { "type": "string", "format": "uuid", "description": "Scene where this trope event occurred." },
+    "timestamp":   { "type": "string", "format": "date-time" },
+    "trope_id": {
+      "type": "string",
+      "description": "Trope identifier from the genre_profile.trope_library (e.g. enemies_to_lovers, forced_proximity, second_chance)."
+    },
+    "trope_name": {
+      "type": "string",
+      "description": "Human-readable trope name for dashboard display."
+    },
+    "genre_module": {
+      "type": "string",
+      "description": "Genre module that defines this trope (e.g. romance_module_v1)."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["activated", "beat_delivered", "partially_resolved", "resolved", "overdue"],
+      "description": "'overdue' fires when a required beat is not delivered by its target scene."
+    },
+    "activated_at_scene": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Scene where this trope was first activated."
+    },
+    "required_beats": {
+      "type": "array",
+      "description": "Ordered list of beats this trope requires for valid resolution. Stub — beat list populated from genre_profile.trope_library during Phase 5 implementation.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["beat_label", "status"],
+        "properties": {
+          "beat_label": { "type": "string", "description": "e.g. 'forced_proximity_trigger', 'enemies_first_crack', 'confession', 'HEA_commitment'" },
+          "beat_id":    { "type": ["string", "null"], "format": "uuid", "description": "Scene beat where delivered. Null until fulfilled." },
+          "target_chapter": { "type": ["integer", "null"], "minimum": 1 },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "fulfilled", "overdue"]
+          }
+        }
+      }
+    }
+  }
+}

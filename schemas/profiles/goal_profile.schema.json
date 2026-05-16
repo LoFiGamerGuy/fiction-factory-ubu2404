@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/profiles/goal_profile/v1",
+  "title": "GoalProfile",
+  "description": "Intent-specific overlay that governs conflict resolution when other profiles disagree, and tunes convergence to the goal of this book. Conflict precedence: Constraint > Sensitivity > Goal > Genre > Audience > Author > Universal. See core-ontology-v3.md §13 and IMPLEMENTATION_PLAN.md Phase 4 T4.5.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["profile_id", "profile_name", "intent", "word_count_target", "success_criteria"],
+  "properties": {
+    "profile_id":    { "type": "string" },
+    "profile_name":  { "type": "string", "description": "e.g. 'kdp_commercial', 'patreon_serial', 'literary_award_target'." },
+    "description":   { "type": "string" },
+    "intent": {
+      "type": "string",
+      "enum": ["kdp_high_revenue", "patreon_serial", "literary_award_target", "experimental_unique", "personal_vanity", "educational", "series_continuation"],
+      "description": "Primary production intent. Drives weight overrides and quality gate priorities."
+    },
+    "word_count_target": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Target word count for the finished manuscript."
+    },
+    "timeline": {
+      "type": "object",
+      "description": "Production timeline targets. Stub — expand during Phase 13 Dashboard implementation.",
+      "additionalProperties": false,
+      "properties": {
+        "target_completion_date": { "type": ["string", "null"], "format": "date" },
+        "scenes_per_day_target":  { "type": ["integer", "null"], "minimum": 1 }
+      }
+    },
+    "genre": {
+      "type": "string",
+      "description": "Primary genre for this project (links to genre_profile.genre_id)."
+    },
+    "series_position": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Position within series (1 = standalone or book 1)."
+    },
+    "critic_weight_modifiers": {
+      "type": "object",
+      "description": "Multiplicative weight overrides for named critic scores in Convergence Controller. e.g. {voice_critic: 1.5} elevates voice weight. Stub — expand during Phase 7.",
+      "additionalProperties": { "type": "number", "minimum": 0.0 }
+    },
+    "reader_weight_modifiers": {
+      "type": "object",
+      "description": "Multiplicative weight overrides for named reader persona scores.",
+      "additionalProperties": { "type": "number", "minimum": 0.0 }
+    },
+    "sacred_thresholds": {
+      "type": "array",
+      "description": "Quality gate IDs that cannot be relaxed even on FORCE-RESOLVE. Sensitivity thresholds are always sacred regardless of this list.",
+      "items": { "type": "string" }
+    },
+    "flexible_thresholds": {
+      "type": "object",
+      "description": "Gate ID → override value for thresholds that this goal can relax (within Sensitivity limits). Stub — expand during Phase 7.",
+      "additionalProperties": { "type": "number" }
+    },
+    "force_resolve_direction": {
+      "type": "string",
+      "enum": ["highest_scoring", "safest", "fastest"],
+      "description": "How to choose the winning candidate on FORCE-RESOLVE.",
+      "default": "highest_scoring"
+    },
+    "success_criteria": {
+      "type": "object",
+      "description": "Measurable success targets for this book. Stub — expand per intent during Phase 5 T5.6.",
+      "additionalProperties": true
+    }
+  }
+}

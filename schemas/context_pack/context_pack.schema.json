@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/context_pack/context_pack/v1",
+  "title": "ContextPack",
+  "description": "Per-agent per-scene materialized context snapshot. Produced by ContextPackBuilder before each agent invocation. Contains the resolved spec overlay, ledger dashboard summary, active promises, character states, and exemplars. All source file hashes are recorded for provenance. See IMPLEMENTATION_PLAN.md Phase 6 T6.5.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pack_id", "agent_id", "scene_id", "book_id", "job_id", "generated_at", "view_schema_version", "provenance", "spec"],
+  "properties": {
+    "pack_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique ID for this context pack instance."
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "Agent this pack was materialized for (e.g. writer_agent, editor_agent, quality_agent)."
+    },
+    "scene_id":  { "type": "string", "format": "uuid" },
+    "book_id":   { "type": "string", "format": "uuid" },
+    "job_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Pipeline run job identifier. Same job_id across all agents in one scene generation pass."
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when this pack was materialized."
+    },
+    "view_schema_version": {
+      "type": "string",
+      "description": "Schema version of the context pack format (e.g. '1.0.0'). Bump on breaking changes."
+    },
+    "provenance": {
+      "$ref": "https://book-pipeline.local/schemas/context_pack/provenance/v1",
+      "description": "Source file hashes and reproducibility metadata."
+    },
+    "spec": {
+      "type": "object",
+      "description": "Resolved ProjectSpec at the time of materialization (profile pentad composed and conflict-resolved). This is the single source of truth all agents read. Stub — formalize ProjectSpec schema during Phase 4 T4.6.",
+      "additionalProperties": true
+    },
+    "ledger_dashboard_summary": {
+      "type": "object",
+      "description": "Structured summary from LedgerManager.get_dashboard_summary(). Injected into every agent's context pack. Contains all 10 ledger current states.",
+      "additionalProperties": false,
+      "properties": {
+        "book_metrics":          { "type": "object", "additionalProperties": true, "description": "Running totals and budget_remaining from BookMetricsLedger." },
+        "active_promises":       { "type": "array", "items": { "type": "object" }, "description": "Open/overdue promises from PromiseLedger." },
+        "character_arcs":        { "type": "object", "additionalProperties": true, "description": "Current arc_phase per character_id from CharacterArcLedger." },
+        "intimacy_timeline":     { "type": "array", "items": { "type": "object" }, "description": "Recent intimacy events per pair from IntimacyEscalationLedger." },
+        "scene_rhythm_window":   { "type": "array", "items": { "type": "string" }, "description": "Last 8–10 scene types from SceneRhythmLedger." },
+        "active_subplots":       { "type": "array", "items": { "type": "object" }, "description": "Open subplots with resolution targets from SubplotLedger." },
+        "trope_status":          { "type": "array", "items": { "type": "object" }, "description": "Active tropes and pending beats from TropeCommitmentLedger." },
+        "reader_info_state":     { "type": "object", "additionalProperties": true, "description": "What reader currently knows vs. each character from ReaderInformationStateLedger." },
+        "series_promises":       { "type": "array", "items": { "type": "object" }, "description": "Open cross-book promises from SeriesPromiseLedger." },
+        "continuity_facts":      { "type": "object", "additionalProperties": true, "description": "Relevant recent bible facts from ContinuityTracker for this scene's characters/locations." }
+      }
+    },
+    "exemplars": {
+      "type": "array",
+      "description": "Voice exemplar references from voice_profile.exemplar_pool. These are computed axis measurements — no prose retained.",
+      "items": { "type": "object", "additionalProperties": true }
+    },
+    "active_promises": {
+      "type": "array",
+      "description": "Open promises relevant to this scene (filtered from PromiseLedger by scene scope). Denormalized here for agent convenience.",
+      "items": { "$ref": "https://book-pipeline.local/schemas/core/promise/v1" }
+    },
+    "character_states": {
+      "type": "object",
+      "description": "Current character state snapshot for all characters in this scene (character_id → character record). Denormalized for agent convenience.",
+      "additionalProperties": { "$ref": "https://book-pipeline.local/schemas/core/character/v1" }
+    }
+  }
+}

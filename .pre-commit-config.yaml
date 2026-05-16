@@ -1,0 +1,25 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy (strict)
+        entry: .venv/bin/mypy
+        language: system
+        types: [python]
+        args: [--strict, --ignore-missing-imports]
+        pass_filenames: true
+        exclude: ^(pipeline/schemas/universal/|dashboard/|\.workspace/|\.venv/)
+
+      - id: validate-schemas
+        name: validate JSON schemas
+        entry: .venv/bin/python scripts/validate_schemas.py
+        language: system
+        pass_filenames: false
+        files: ^schemas/.*\.schema\.json$

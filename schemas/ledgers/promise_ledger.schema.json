@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/ledgers/promise_ledger/v1",
+  "title": "PromiseLedger Event",
+  "description": "Append-only event log entry for the Promise Ledger. Each event records a state transition on a narrative promise. Ledger is per-book; stored in SQLite. No GO at chapter level if any promise is overdue.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "book_id", "scene_id", "promise_id", "event_type", "timestamp"],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique event identifier (append-only; never updated)."
+    },
+    "book_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Book this promise belongs to."
+    },
+    "scene_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Scene that triggered this event."
+    },
+    "promise_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The promise being acted upon. Refs core/promise.schema.json."
+    },
+    "event_type": {
+      "type": "string",
+      "enum": ["opened", "progressed", "resolved", "broken"],
+      "description": "'broken' is a hard fail logged to the issue report."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of event creation."
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "Agent that generated this event (e.g. writer_agent, convergence_controller)."
+    },
+    "details": {
+      "type": "string",
+      "description": "Free-text summary of what happened (e.g. 'Chekhov pistol introduced in scene description')."
+    }
+  }
+}

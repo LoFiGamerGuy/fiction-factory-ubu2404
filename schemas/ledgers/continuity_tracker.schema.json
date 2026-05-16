@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/ledgers/continuity_tracker/v1",
+  "title": "ContinuityTracker Event",
+  "description": "Append-only bible fact log. Every prose assertion that establishes a canonical fact about the story world is recorded here. Used by ContinuityAgent to detect contradictions. Covers characters, locations, objects, timeline, and world-facts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "book_id", "scene_id", "fact_type", "entity_id", "fact_key", "fact_value", "source_scene", "timestamp"],
+  "properties": {
+    "event_id":     { "type": "string", "format": "uuid" },
+    "book_id":      { "type": "string", "format": "uuid" },
+    "scene_id":     { "type": "string", "format": "uuid" },
+    "timestamp":    { "type": "string", "format": "date-time" },
+    "fact_type": {
+      "type": "string",
+      "enum": ["character", "location", "object", "relationship", "timeline", "world_fact", "capability"],
+      "description": "Entity category this fact belongs to. Determines which contradiction detectors apply."
+    },
+    "entity_id": {
+      "type": "string",
+      "description": "ID of the entity this fact is about (character_id, location_id, object_id, etc.)."
+    },
+    "entity_name": {
+      "type": "string",
+      "description": "Human-readable name for display (denormalized from the entity record)."
+    },
+    "fact_key": {
+      "type": "string",
+      "description": "Dot-notation key identifying what is being asserted (e.g. 'eye_color', 'location.city', 'job_title', 'age')."
+    },
+    "fact_value": {
+      "description": "The asserted value. Type varies by fact_key; validated during Phase 7 implementation.",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "array" }
+      ]
+    },
+    "source_scene": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Scene ID where this fact was first established. Used by contradiction detection to surface the conflicting scene."
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Confidence that this fact is canonical (1.0 = explicitly stated; lower = inferred). Stub — expand during Phase 7 implementation.",
+      "default": 1.0
+    },
+    "supersedes_event_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "If this event corrects a prior fact, the event_id of the prior record. Null for new facts. Ledger is append-only; prior records are never deleted."
+    }
+  }
+}
