@@ -1,0 +1,14 @@
+profile_id: fixture-goal-violates-sacred-001
+version: "1.0.0"
+intent: series_brand
+conflict_precedence_rules:
+  - axis: max_heat_level
+    precedence_order: [goal, sensitivity, genre, audience, author, universal]
+weight_overrides:
+  critic_weights: {}
+  reader_weights: {}
+success_criteria:
+  - criterion_id: placeholder
+    metric: word_count_total
+    threshold: 1
+    operator: gte

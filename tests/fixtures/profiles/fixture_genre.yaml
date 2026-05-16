@@ -1,0 +1,67 @@
+profile_id: fixture-genre-001
+version: "1.0.0"
+genre_name: romance
+genre_module_status: validated
+scene_function_vocabulary:
+  - meet_cute
+  - setup_tension
+  - first_conflict
+  - midpoint_escalation
+  - black_moment
+  - hea_resolution
+required_scene_slots:
+  - slot_id: meet_cute
+    description: Hero and heroine meet under charged circumstances
+    target_chapter_range:
+      min: 1
+      max: 3
+    required: true
+  - slot_id: black_moment
+    description: All-is-lost moment before HEA
+    target_chapter_range:
+      min: 20
+      max: 28
+    required: true
+quality_gates:
+  - gate_id: heat_curve_minimum
+    metric: heat_curve_position
+    threshold: 0.6
+    operator: gte
+    description: Heat curve must reach 0.6 by midpoint
+self_audit_rubric:
+  - item_id: emotional_stakes
+    question: Does this scene raise emotional stakes?
+    weight: 0.3
+  - item_id: character_consistency
+    question: Do characters act consistently with their established voice?
+    weight: 0.4
+  - item_id: promise_progress
+    question: Does this scene advance or open a tracked promise?
+    weight: 0.3
+heat_scale:
+  min: 1
+  max: 5
+  anchor_definitions:
+    "1": sweet
+    "2": sensual
+    "3": steamy
+    "4": explicit
+    "5": erotic
+structural_conventions:
+  word_count_range:
+    min: 80000
+    max: 120000
+  chapter_count_range:
+    min: 25
+    max: 40
+  act_structure: three_act
+  pov_default: close_third
+  tense_default: past
+trope_library:
+  - trope_id: enemies_to_lovers
+    name: Enemies to Lovers
+    category: must_have
+    required_beats: [first_clash, grudging_respect, hate_to_attraction, declaration]
+reader_contract:
+  - romantic_tension
+  - hea_or_hfn

@@ -1,0 +1,27 @@
+profile_id: fixture-goal-001
+version: "1.0.0"
+intent: series_brand
+conflict_precedence_rules:
+  - axis: word_count
+    precedence_order: [goal, genre, audience, author, universal]
+  - axis: pov_distance
+    precedence_order: [author, genre, goal, universal]
+weight_overrides:
+  critic_weights:
+    craft_critic: 0.30
+    ai_tell_critic: 0.25
+    specificity_critic: 0.20
+    continuity_critic: 0.25
+  reader_weights:
+    core-romance-reader: 0.60
+    genre-veteran: 0.40
+success_criteria:
+  - criterion_id: word_count_target
+    metric: word_count_total
+    threshold: 160000
+    operator: gte
+    description: Series One targets 160k words
+  - criterion_id: ai_tell_density
+    metric: ai_tell_density_per_1k
+    threshold: 2.0
+    operator: lte

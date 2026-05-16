@@ -1,0 +1,43 @@
+profile_id: fixture-audience-001
+version: "1.0.0"
+reader_lens: >
+  Adult romance reader seeking emotional investment, satisfying HEA, and
+  heat that builds naturally. Values character depth over plot complexity.
+tolerance_bands:
+  complexity:
+    min: 0.2
+    max: 0.7
+  darkness:
+    min: 0.0
+    max: 0.6
+  slow_burn:
+    min: 0.3
+    max: 1.0
+expectation_set:
+  - hea_required
+  - no_cliffhanger_endings
+  - romantic_tension_must_resolve
+trigger_sets:
+  dnf_triggers:
+    - hero_dies
+    - no_hea_or_hfn
+    - cheating_without_resolution
+  satisfaction_triggers:
+    - earned_hea
+    - banter
+    - emotional_payoff
+reader_personas:
+  - persona_id: core-romance-reader
+    name: Core Romance Reader
+    description: Reads 2-4 romance novels per month; values emotional arc over plot twists
+    weight: 0.6
+    reading_preferences:
+      heat_preference: steamy
+      pov: close_third
+  - persona_id: genre-veteran
+    name: Genre Veteran
+    description: Deeply familiar with romance tropes; alert to clichés; rewards fresh execution
+    weight: 0.4
+    reading_preferences:
+      heat_preference: any
+      pov: any

@@ -1,0 +1,24 @@
+profile_id: fixture-sensitivity-001
+version: "1.0.0"
+sacred: true
+content_domain_policies:
+  sexual_content: allow
+  graphic_violence: allow_with_constraints
+  self_harm: prohibit
+  child_harm: prohibit
+  substance_use: allow_with_constraints
+vocabulary_restrictions:
+  - term_or_regex: "\\bslur1\\b"
+    restriction_level: prohibited
+    notes: Prohibited slur example
+audience_markers:
+  - adult_unrestricted
+hard_thresholds:
+  max_heat_level: 5
+  max_violence_intensity: 3
+auto_content_warnings:
+  - explicit_sexual_content
+representation_policy:
+  authenticity_requirements:
+    - marginalized_groups_require_sensitivity_review
+  language_restrictions: []

@@ -90,6 +90,7 @@ select = ["E", "F", "I", "N", "W", "UP"]
 "tests/**" = ["S", "ANN"]
 "scripts/**" = ["T20"]
 "pipeline/schemas/universal/**" = ["E501"]
+"pipeline/schemas/profiles/**" = ["E501"]
 
 [tool.coverage.run]
 source = ["pipeline", "agents"]

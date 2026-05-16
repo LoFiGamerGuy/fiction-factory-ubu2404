@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fiction-factory/schemas/profiles/author_profile",
+  "title": "AuthorProfile",
+  "description": "Voice-axis values and enforcement weights for a pen-name author identity (core-ontology-v3 §11).",
+  "type": "object",
+  "required": ["profile_id", "version", "display_name", "voice_axes", "enforcement_weights"],
+  "additionalProperties": false,
+  "properties": {
+    "profile_id": { "type": "string" },
+    "version": { "type": "string" },
+    "display_name": { "type": "string", "description": "Pen name." },
+
+    "voice_axes": {
+      "type": "object",
+      "description": "Target values per voice axis group. All axes are universal and measurable; values vary per author.",
+      "additionalProperties": false,
+      "properties": {
+        "sentence_level": {
+          "type": "object",
+          "description": "Sentence length mean/std, opener entropy, mood distribution.",
+          "properties": {
+            "length_mean_words": { "type": "number", "minimum": 1 },
+            "length_std_words": { "type": "number", "minimum": 0 },
+            "opener_entropy_min": { "type": "number", "minimum": 0 },
+            "mood_distribution": {
+              "type": "object",
+              "properties": {
+                "declarative": { "type": "number", "minimum": 0, "maximum": 1 },
+                "interrogative": { "type": "number", "minimum": 0, "maximum": 1 },
+                "imperative": { "type": "number", "minimum": 0, "maximum": 1 },
+                "exclamatory": { "type": "number", "minimum": 0, "maximum": 1 }
+              }
+            }
+          }
+        },
+        "lexical": {
+          "type": "object",
+          "description": "Vocabulary diversity, register, rare word frequency.",
+          "properties": {
+            "diversity_metric": { "type": "string", "enum": ["TTR", "MTLD", "vocd_D"] },
+            "diversity_target": { "type": "number" },
+            "formality_register": { "type": "string", "enum": ["very_casual", "casual", "neutral", "formal", "very_formal"] },
+            "rare_word_frequency": { "type": "number", "minimum": 0, "maximum": 1 },
+            "concrete_noun_ratio": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "syntactic": {
+          "type": "object",
+          "description": "Clause complexity, subordination, parallelism.",
+          "properties": {
+            "subordinate_clause_rate": { "type": "number", "minimum": 0 },
+            "parallel_structure_rate": { "type": "number", "minimum": 0 },
+            "passive_voice_rate_max": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "dialogue": {
+          "type": "object",
+          "description": "Dialogue-to-narration ratio and internal monologue share.",
+          "properties": {
+            "to_narration_ratio": { "type": "number", "minimum": 0 },
+            "internal_monologue_share": { "type": "number", "minimum": 0, "maximum": 1 },
+            "tag_style": { "type": "string", "enum": ["minimal", "moderate", "descriptive"] }
+          }
+        },
+        "sensory": {
+          "type": "object",
+          "description": "Sensory token density by modality (tokens per 1000 words).",
+          "properties": {
+            "visual": { "type": "number", "minimum": 0 },
+            "auditory": { "type": "number", "minimum": 0 },
+            "olfactory": { "type": "number", "minimum": 0 },
+            "gustatory": { "type": "number", "minimum": 0 },
+            "tactile": { "type": "number", "minimum": 0 },
+            "proprioceptive": { "type": "number", "minimum": 0 }
+          }
+        },
+        "pacing": {
+          "type": "object",
+          "description": "Paragraph length and scene-transition cadence.",
+          "properties": {
+            "paragraph_length_mean_words": { "type": "number", "minimum": 1 },
+            "short_long_alternation_index": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "metaphor": {
+          "type": "object",
+          "description": "Figurative language density and domain bias.",
+          "properties": {
+            "figurative_per_1k": { "type": "number", "minimum": 0 },
+            "domain_bias": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "subtext": {
+          "type": "object",
+          "description": "Modal hedge and adverb density.",
+          "properties": {
+            "modal_hedge_per_1k": { "type": "number", "minimum": 0 },
+            "adverb_density": { "type": "number", "minimum": 0 },
+            "adjective_stacking_max": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "cadence": {
+          "type": "object",
+          "description": "Punctuation signature — em dash, semicolon, ellipsis rates.",
+          "properties": {
+            "em_dash_per_1k_max": { "type": "number", "minimum": 0 },
+            "semicolon_per_1k": { "type": "number", "minimum": 0 },
+            "ellipsis_per_1k": { "type": "number", "minimum": 0 }
+          }
+        }
+      }
+    },
+
+    "forbidden_constructions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Regex patterns for constructions this author never uses."
+    },
+
+    "enforcement_weights": {
+      "type": "object",
+      "description": "Weight (0–1) assigned to each voice axis group when computing aggregate fidelity distance.",
+      "additionalProperties": { "type": "number", "minimum": 0, "maximum": 1 }
+    },
+
+    "calibration_history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["calibration_run_id", "timestamp"],
+        "properties": {
+          "calibration_run_id": { "type": "string" },
+          "timestamp": { "type": "string", "format": "date-time" },
+          "notes": { "type": "string" }
+        }
+      },
+      "description": "References to calibration runs that updated this profile."
+    }
+  }
+}

@@ -1,65 +1,80 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://book-pipeline.local/schemas/profiles/audience_profile/v1",
+  "$id": "https://fiction-factory/schemas/profiles/audience_profile",
   "title": "AudienceProfile",
-  "description": "Reader lens profile. Defines tolerance bands, expectation sets, and instantiates named reader personas used by the Reader agent. See core-ontology-v3.md §10 and IMPLEMENTATION_PLAN.md Phase 4 T4.3.",
+  "description": "Reader lens, tolerance bands, expectations, and reader personas (core-ontology-v3 §10).",
   "type": "object",
+  "required": ["profile_id", "version", "reader_lens", "tolerance_bands", "expectation_set", "trigger_sets"],
   "additionalProperties": false,
-  "required": ["profile_id", "profile_name", "genre_expectations", "reader_personas"],
   "properties": {
-    "profile_id":   { "type": "string" },
-    "profile_name": { "type": "string", "description": "e.g. 'romance_reader', 'erotica_reader'." },
-    "description":  { "type": "string" },
-    "genre_expectations": {
-      "type": "array",
-      "description": "List of genre conventions this audience expects satisfied (e.g. 'HEA or HFN', 'satisfying emotional arc', 'chemistry present from chapter 1').",
-      "items": { "type": "string" }
-    },
-    "heat_preference": {
+    "profile_id": { "type": "string" },
+    "version": { "type": "string" },
+
+    "reader_lens": {
       "type": "string",
-      "enum": ["sweet", "sensual", "steamy", "erotic"],
-      "description": "Expected heat level. Romance_module heat_level should meet or exceed this for satisfaction."
+      "description": "Plain-language description of the primary reader's perspective and expectations."
     },
-    "comp_titles": {
-      "type": "array",
-      "description": "Comp titles (metadata only — no prose retained). Used for market positioning.",
-      "items": {
+
+    "tolerance_bands": {
+      "type": "object",
+      "description": "Per-dimension tolerance range (0–1) the audience will accept without DNF.",
+      "additionalProperties": {
         "type": "object",
-        "additionalProperties": false,
-        "required": ["title", "author"],
+        "required": ["min", "max"],
         "properties": {
-          "title":  { "type": "string" },
-          "author": { "type": "string" }
+          "min": { "type": "number", "minimum": 0, "maximum": 1 },
+          "max": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      },
+      "examples": [{"complexity": {"min": 0.2, "max": 0.7}, "darkness": {"min": 0.0, "max": 0.6}}]
+    },
+
+    "expectation_set": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Explicit expectations this audience brings (e.g. hea_required, no_cliffhanger_endings)."
+    },
+
+    "trigger_sets": {
+      "type": "object",
+      "required": ["dnf_triggers", "satisfaction_triggers"],
+      "additionalProperties": false,
+      "properties": {
+        "dnf_triggers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Conditions that cause this audience to DNF (e.g. hero_dies, no_resolution)."
+        },
+        "satisfaction_triggers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Elements that guarantee re-read / recommendation (e.g. earned_hea, banter)."
         }
       }
     },
-    "tolerance_bands": {
-      "type": "object",
-      "description": "How much of each hard-to-read element this audience tolerates before DNF. Values are 0.0 (zero tolerance) to 1.0 (highly tolerant). Stub — enumerate axes during Phase 4 T4.3.",
-      "additionalProperties": false,
-      "properties": {
-        "complexity":     { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-        "ambiguity":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-        "slow_pace":      { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-        "darkness":       { "type": "number", "minimum": 0.0, "maximum": 1.0 },
-        "experimentation":{ "type": "number", "minimum": 0.0, "maximum": 1.0 }
-      }
-    },
+
     "reader_personas": {
       "type": "array",
-      "description": "Named reader personas instantiated for evaluation. 3–5 personas covering the target audience spread. Each is passed to the Reader agent.",
       "minItems": 1,
       "items": {
         "type": "object",
+        "required": ["persona_id", "name", "description"],
         "additionalProperties": false,
-        "required": ["persona_id", "persona_name", "weight"],
         "properties": {
-          "persona_id":     { "type": "string" },
-          "persona_name":   { "type": "string", "description": "e.g. 'genre_veteran', 'emotional_probe', 'skim_reader'." },
-          "weight":         { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Weight in aggregated reader score (weights across all personas should sum to 1.0)." },
-          "description":    { "type": "string" },
-          "dnf_triggers":   { "type": "array", "items": { "type": "string" } },
-          "loyalty_triggers": { "type": "array", "items": { "type": "string" } }
+          "persona_id": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "weight": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Relative weight in aggregate reader satisfaction score."
+          },
+          "reading_preferences": {
+            "type": "object",
+            "description": "Key-value pairs of this persona's specific preferences.",
+            "additionalProperties": { "type": ["string", "number", "boolean"] }
+          }
         }
       }
     }

@@ -1,0 +1,58 @@
+profile_id: fixture-author-001
+version: "1.0.0"
+display_name: "Fixture Author"
+voice_axes:
+  sentence_level:
+    length_mean_words: 14.0
+    length_std_words: 4.5
+    opener_entropy_min: 1.2
+    mood_distribution:
+      declarative: 0.75
+      interrogative: 0.10
+      imperative: 0.05
+      exclamatory: 0.10
+  lexical:
+    diversity_metric: MTLD
+    diversity_target: 72.0
+    formality_register: casual
+    rare_word_frequency: 0.03
+    concrete_noun_ratio: 0.62
+  syntactic:
+    subordinate_clause_rate: 0.3
+    parallel_structure_rate: 0.1
+    passive_voice_rate_max: 0.08
+  dialogue:
+    to_narration_ratio: 0.42
+    internal_monologue_share: 0.22
+    tag_style: minimal
+  sensory:
+    visual: 9.0
+    auditory: 3.5
+    olfactory: 1.5
+    gustatory: 0.8
+    tactile: 4.2
+    proprioceptive: 1.0
+  pacing:
+    paragraph_length_mean_words: 55.0
+    short_long_alternation_index: 0.65
+  metaphor:
+    figurative_per_1k: 4.2
+    domain_bias: [nature, sports, architecture]
+  subtext:
+    modal_hedge_per_1k: 2.8
+    adverb_density: 3.1
+    adjective_stacking_max: 2
+  cadence:
+    em_dash_per_1k_max: 4.5
+    semicolon_per_1k: 0.8
+    ellipsis_per_1k: 1.2
+forbidden_constructions:
+  - "\\bsuddenly\\b"
+  - "\\bvery very\\b"
+enforcement_weights:
+  sentence_level: 0.25
+  lexical: 0.20
+  dialogue: 0.20
+  sensory: 0.15
+  cadence: 0.20
+calibration_history: []

@@ -1,68 +1,81 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://book-pipeline.local/schemas/profiles/sensitivity_profile/v1",
+  "$id": "https://fiction-factory/schemas/profiles/sensitivity_profile",
   "title": "SensitivityProfile",
-  "description": "Content sensitivity policy. SACRED — Goal Profile cannot loosen these thresholds. Sensitivity violations trigger RE-PLAN only; cannot be FORCE-RESOLVED. Required for autonomous content generation. See core-ontology-v3.md §12 and IMPLEMENTATION_PLAN.md Phase 4 T4.4.",
+  "description": "Content sensitivity policy. Sacred: Goal cannot loosen hard_thresholds (core-ontology-v3 §12).",
   "type": "object",
+  "required": ["profile_id", "version", "content_domain_policies", "hard_thresholds", "sacred", "audience_markers"],
   "additionalProperties": false,
-  "required": ["profile_id", "profile_name", "content_rating", "heat_ceiling", "topic_policies"],
   "properties": {
-    "profile_id":   { "type": "string", "description": "Unique profile identifier." },
-    "profile_name": { "type": "string", "description": "Human-readable name (e.g. 'default', 'ya_safe', 'adult_unrestricted')." },
-    "description":  { "type": "string" },
-    "content_rating": {
-      "type": "string",
-      "enum": ["family_friendly", "ya_safe", "new_adult", "adult_unrestricted", "custom"],
-      "description": "Overall content rating for books using this profile."
+    "profile_id": { "type": "string" },
+    "version": { "type": "string" },
+    "sacred": {
+      "type": "boolean",
+      "const": true,
+      "description": "Always true. Marks that Goal cannot loosen this profile's hard_thresholds."
     },
-    "age_floor": {
-      "type": ["integer", "null"],
-      "minimum": 0,
-      "description": "Minimum character age for any romantic or sexual content. Sacred — violations = RE-PLAN."
-    },
-    "heat_ceiling": {
-      "type": "string",
-      "enum": ["none", "sweet", "sensual", "steamy", "erotic"],
-      "description": "Maximum heat level allowed. goal_profile and romance_module heat_level must not exceed this. Sacred."
-    },
-    "topic_policies": {
+
+    "content_domain_policies": {
       "type": "object",
-      "description": "Policy per content topic. Goal Profile can only tighten (set to forbidden or required_warning) — never loosen.",
+      "description": "Map of content domain → policy.",
       "additionalProperties": {
         "type": "string",
-        "enum": ["forbidden", "permitted", "required_warning", "required_thoughtful"],
-        "description": "Policy: forbidden=REJECT if present; permitted=allowed; required_warning=allowed with content warning; required_thoughtful=allowed with sensitivity review gate."
+        "enum": ["allow", "allow_with_constraints", "prohibit"]
       },
-      "x-topic-list": ["substance_use", "sexual_content", "violence", "self_harm", "suicide", "sexual_assault", "child_harm", "animal_harm", "racism", "ableism", "religious_content", "political_content"]
+      "examples": [{
+        "sexual_content": "allow",
+        "graphic_violence": "allow_with_constraints",
+        "child_harm": "prohibit",
+        "self_harm": "prohibit"
+      }]
     },
-    "no_fly_topics": {
-      "type": "array",
-      "description": "Additional topic strings that are forbidden for this profile (extends topic_policies forbidden entries). Sacred.",
-      "items": { "type": "string" }
-    },
-    "content_warnings": {
-      "type": "array",
-      "description": "Content warnings that must be appended to the published manuscript if any matching content is present.",
-      "items": { "type": "string" }
-    },
+
     "vocabulary_restrictions": {
       "type": "array",
-      "description": "Terms forbidden regardless of context (e.g. slurs). Extends voice_profile no_fly_words with sacred status.",
-      "items": { "type": "string" }
+      "items": {
+        "type": "object",
+        "required": ["term_or_regex", "restriction_level"],
+        "additionalProperties": false,
+        "properties": {
+          "term_or_regex": { "type": "string" },
+          "restriction_level": {
+            "type": "string",
+            "enum": ["prohibited", "flagged"],
+            "description": "prohibited = never output; flagged = critic review required."
+          },
+          "notes": { "type": "string" }
+        }
+      }
     },
+
+    "audience_markers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Applicable audience labels (e.g. adult_unrestricted, ya_safe, new_adult)."
+    },
+
+    "hard_thresholds": {
+      "type": "object",
+      "description": "Sacred numeric thresholds that cannot be loosened by Goal profile. x-sacred: true.",
+      "x-sacred": true,
+      "additionalProperties": {
+        "type": "number"
+      },
+      "examples": [{"max_heat_level": 5, "max_violence_intensity": 4}]
+    },
+
+    "auto_content_warnings": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Content warning strings auto-injected into the publication package."
+    },
+
     "representation_policy": {
       "type": "object",
-      "description": "Policies for depicting marginalized groups. Stub — expand during Phase 4 T4.4 implementation.",
-      "additionalProperties": true
-    },
-    "validation_hooks": {
-      "type": "object",
-      "description": "When sensitivity checks are applied. Stub — expand during Phase 8 Sensitivity Critic implementation.",
-      "additionalProperties": false,
+      "description": "Policies for marginalized group depiction.",
       "properties": {
-        "pre_draft_check":  { "type": "boolean", "default": true },
-        "post_draft_check": { "type": "boolean", "default": true },
-        "final_audit":      { "type": "boolean", "default": true }
+        "authenticity_requirements": { "type": "array", "items": { "type": "string" } },
+        "language_restrictions": { "type": "array", "items": { "type": "string" } }
       }
     }
   }
