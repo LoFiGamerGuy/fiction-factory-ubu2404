@@ -1,0 +1,59 @@
+{
+  "_note": "Plausible finalized scene fixture for ledger system tests. Romance genre, chapter 3 scene 2.",
+  "scene_id": "scene-003-002",
+  "book_id": "book-test-001",
+  "chapter_id": "chapter-003",
+  "series_id": "series-test-001",
+  "timestamp": "2026-05-16T10:00:00Z",
+  "scene_type": "dialogue",
+  "metrics": {
+    "event_id": "evt-metrics-001",
+    "word_count": 1200,
+    "interiority_pct": 0.35,
+    "dialogue_ratio": 0.40,
+    "exposition_pct": 0.15,
+    "action_pct": 0.10,
+    "sensory_density_per_1k": 8.5,
+    "em_dash_density": 3.2,
+    "sentence_length_avg": 14.7,
+    "ai_tell_count": 1,
+    "no_fly_violations": 0,
+    "heat_curve_position": 0.3,
+    "sex_scene_flag": false
+  },
+  "character_arc_events": [
+    {
+      "event_id": "evt-arc-001",
+      "character_id": "char-001",
+      "arc_phase": "wound_open",
+      "wound_state": "believes love equals abandonment; wound fresh",
+      "belief_current": "I will always be left",
+      "belief_true": "I am worthy of lasting love"
+    }
+  ],
+  "intimacy_events": [],
+  "revelation_events": [
+    {
+      "event_id": "evt-rev-001",
+      "fact_id": "fact-001",
+      "revelation_type": "dramatic_irony",
+      "fact_description": "Reader knows the hero is hiding his title",
+      "known_by_reader": true,
+      "known_by_characters": [],
+      "irony_type": "dramatic"
+    }
+  ],
+  "subplot_events": [
+    {
+      "event_id": "evt-sub-001",
+      "subplot_id": "subplot-001",
+      "subplot_type": "romantic",
+      "status": "escalating",
+      "description": "Hero and heroine forced to share office during snowstorm",
+      "priority": 1
+    }
+  ],
+  "trope_events": [],
+  "promise_events": [],
+  "continuity_events": []
+}
