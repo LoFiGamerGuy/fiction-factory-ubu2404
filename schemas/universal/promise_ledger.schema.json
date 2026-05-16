@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fiction-factory/schemas/universal/promise_ledger",
+  "title": "PromiseLedger",
+  "description": "Append-only log of narrative promises (core-ontology-v3 §5). Convergence rule: no GO at chapter level if any promises are overdue.",
+  "type": "object",
+  "required": ["book_id", "promises"],
+  "additionalProperties": false,
+  "properties": {
+    "book_id": { "type": "string" },
+    "version": { "type": "string", "default": "1.0.0" },
+    "schema_version": { "type": "string", "default": "1.0.0" },
+    "promises": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Promise" },
+      "description": "Append-only; do not delete or modify existing entries."
+    }
+  },
+
+  "$defs": {
+    "PromiseType": {
+      "type": "string",
+      "enum": [
+        "foreshadowing",
+        "chekhov_object",
+        "character_question",
+        "mystery_thread",
+        "emotional_debt",
+        "thematic_setup",
+        "romantic_tension",
+        "world_question"
+      ]
+    },
+
+    "ResolutionState": {
+      "type": "string",
+      "enum": ["open", "resolved", "abandoned", "deferred_to_sequel"]
+    },
+
+    "Priority": {
+      "type": "string",
+      "enum": ["critical", "high", "medium", "low"],
+      "description": "critical = overdue triggers RE-PLAN; high/medium = REVISE; low = log only."
+    },
+
+    "Promise": {
+      "type": "object",
+      "required": ["id", "type", "opened_at", "opened_by", "must_resolve_by", "resolution_state", "priority", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "$ref": "#/$defs/PromiseType" },
+        "opened_at": {
+          "type": "string",
+          "description": "Unit ID (chapter/scene/beat) at which this promise was established."
+        },
+        "opened_by": {
+          "type": "string",
+          "description": "Agent ID that created this promise entry."
+        },
+        "must_resolve_by": {
+          "type": "string",
+          "description": "Unit ID by which this promise must be resolved. Overdue = past this unit without resolution."
+        },
+        "resolution_state": { "$ref": "#/$defs/ResolutionState" },
+        "resolved_at": {
+          "type": ["string", "null"],
+          "description": "Unit ID where resolution occurred (null if open)."
+        },
+        "resolved_by": {
+          "type": ["string", "null"],
+          "description": "Agent ID that committed the resolution."
+        },
+        "priority": { "$ref": "#/$defs/Priority" },
+        "description": {
+          "type": "string",
+          "description": "Plain-language description of the promise."
+        },
+        "acceptable_resolutions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Enumerated resolution strategies the Convergence Controller may accept."
+        },
+        "convergence_note": {
+          "type": ["string", "null"],
+          "description": "FORCE-RESOLVE note if resolution was forced (logged for issue report)."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fiction-factory/schemas/universal/convergence",
+  "title": "ConvergenceFunction",
+  "description": "Deterministic decision rule for the Convergence Controller (core-ontology-v3 §8). Universal property: never halts. Decision priority: RE-PLAN → REVISE → FORCE-RESOLVE → GO.",
+  "type": "object",
+  "required": ["profile_id", "hard_fail_conditions", "revise_conditions", "force_resolve_policy", "go_conditions"],
+  "additionalProperties": false,
+  "properties": {
+    "profile_id": { "type": "string", "description": "Genre/Goal profile this convergence config belongs to." },
+    "version": { "type": "string", "default": "1.0.0" },
+    "schema_version": { "type": "string", "default": "1.0.0" },
+
+    "hard_fail_conditions": {
+      "type": "object",
+      "description": "Any true → RE-PLAN. Sensitivity violations are always RE-PLAN; cannot be FORCE-RESOLVEd.",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "bible_contradiction": {
+          "type": "boolean",
+          "const": true,
+          "description": "Any unresolved ContinuityModel contradiction → RE-PLAN."
+        },
+        "must_have_absent": {
+          "type": "boolean",
+          "const": true,
+          "description": "A genre/goal required element (trope, beat, promise) is absent → RE-PLAN."
+        },
+        "taboo_violation": {
+          "type": "boolean",
+          "const": true,
+          "description": "Any character taboo violated → RE-PLAN."
+        },
+        "sensitivity_violation_hard": {
+          "type": "boolean",
+          "const": true,
+          "description": "Sensitivity critic hard veto → RE-PLAN only. Sacred: never FORCE-RESOLVE."
+        },
+        "dnf_likelihood_ceiling": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "If DNF likelihood exceeds this value → RE-PLAN. Goal-defined."
+        }
+      }
+    },
+
+    "revise_conditions": {
+      "type": "object",
+      "description": "Any true → REVISE (if max_revise_attempts not exceeded).",
+      "additionalProperties": false,
+      "properties": {
+        "weighted_critic_score_floor": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 10,
+          "description": "If weighted aggregate critic score < this floor → REVISE."
+        },
+        "weighted_reader_satisfaction_floor": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "If weighted reader satisfaction < this floor → REVISE."
+        },
+        "voice_fidelity_distance_ceiling": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "If voice distance > this ceiling → REVISE."
+        },
+        "ai_tell_density_ceiling": {
+          "type": "number",
+          "minimum": 0,
+          "description": "If AI-tell density (per 1000 words) > this ceiling → REVISE."
+        },
+        "specificity_index_floor": {
+          "type": "number",
+          "minimum": 0,
+          "description": "If specificity index < this floor → REVISE."
+        },
+        "engagement_floor": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "If engagement score < this floor → REVISE."
+        },
+        "promise_ledger_overdue": {
+          "type": "boolean",
+          "const": true,
+          "description": "Any critical/high promise overdue at chapter boundary → REVISE."
+        }
+      }
+    },
+
+    "max_revise_attempts": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 3,
+      "description": "Maximum REVISE iterations before escalating to FORCE-RESOLVE."
+    },
+
+    "force_resolve_policy": {
+      "type": "object",
+      "description": "Applied after max_revise_attempts exceeded. Picks highest-scoring candidate, logs relaxed thresholds, appends issue report entry.",
+      "required": ["candidate_selection", "log_relaxed_thresholds", "append_issue_report"],
+      "additionalProperties": false,
+      "properties": {
+        "candidate_selection": {
+          "type": "string",
+          "enum": ["highest_weighted_score", "lowest_ai_tell_density", "user_configured"],
+          "description": "How to pick the winner among available candidates."
+        },
+        "log_relaxed_thresholds": {
+          "type": "boolean",
+          "const": true,
+          "description": "Relaxed thresholds must be logged in the decision log and calibration log."
+        },
+        "append_issue_report": {
+          "type": "boolean",
+          "const": true,
+          "description": "Issue report entry is required for every FORCE-RESOLVE."
+        },
+        "sacred_thresholds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Threshold names that cannot be relaxed even during FORCE-RESOLVE. Sensitivity thresholds are always in this list.",
+          "default": ["sensitivity_violation_hard"]
+        }
+      }
+    },
+
+    "go_conditions": {
+      "type": "object",
+      "description": "All revise conditions pass and no hard fails → GO.",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "never_halts": {
+          "type": "boolean",
+          "const": true,
+          "description": "Universal invariant: the Convergence Controller never halts waiting for human input."
+        }
+      }
+    },
+
+    "critic_weights": {
+      "type": "object",
+      "description": "Weight map critic_id → float (sum not required to be 1; normalized at runtime). Genre/Goal profiles extend this.",
+      "additionalProperties": { "type": "number", "minimum": 0 }
+    },
+
+    "reader_weights": {
+      "type": "object",
+      "description": "Weight map reader_persona_id → float.",
+      "additionalProperties": { "type": "number", "minimum": 0 }
+    }
+  }
+}

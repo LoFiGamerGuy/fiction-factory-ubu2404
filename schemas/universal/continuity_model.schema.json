@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fiction-factory/schemas/universal/continuity_model",
+  "title": "ContinuityModel",
+  "description": "Canonical truth / story bible (core-ontology-v3 §4). Every prose assertion must be derivable from or consistent with this model.",
+  "type": "object",
+  "required": ["book_id", "version"],
+  "additionalProperties": false,
+  "properties": {
+    "book_id": { "type": "string" },
+    "version": { "type": "string", "default": "1.0.0" },
+    "schema_version": { "type": "string", "default": "1.0.0" },
+
+    "characters": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/Character" },
+      "description": "Map of character_id → Character."
+    },
+    "locations": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/Location" }
+    },
+    "objects": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/WorldObject" }
+    },
+    "concepts": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/Concept" }
+    },
+    "factions": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/Faction" }
+    },
+    "timeline": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/TimelineEvent" },
+      "description": "Ordered chronological events (diegetic time)."
+    },
+    "relationships": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Relationship" }
+    }
+  },
+
+  "$defs": {
+    "Character": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "aliases": { "type": "array", "items": { "type": "string" } },
+        "physical": {
+          "type": "object",
+          "description": "Physical traits (height, build, coloring, distinguishing marks, etc.).",
+          "additionalProperties": { "type": "string" }
+        },
+        "psychological": {
+          "type": "object",
+          "description": "Core traits, fears, wants, wounds, belief systems.",
+          "additionalProperties": { "type": "string" }
+        },
+        "voice": {
+          "type": "object",
+          "description": "Speech patterns, vocabulary level, tics, idiolect features.",
+          "additionalProperties": { "type": "string" }
+        },
+        "arc": {
+          "type": "object",
+          "description": "Character arc definition: start_state, end_state, transformation_type.",
+          "additionalProperties": { "type": "string" }
+        },
+        "relationships": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Relationship IDs involving this character."
+        },
+        "backstory": { "type": "string" },
+        "taboos": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Things this character would never do/say (continuity hard constraints)."
+        }
+      }
+    },
+
+    "Location": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "spatial_relationships": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "sensory_anchors": {
+          "type": "object",
+          "description": "Canonical sensory details by modality.",
+          "additionalProperties": { "type": "string" }
+        }
+      }
+    },
+
+    "WorldObject": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "properties": { "type": "object", "additionalProperties": true },
+        "current_location_id": { "type": ["string", "null"] },
+        "current_owner_id": { "type": ["string", "null"] }
+      }
+    },
+
+    "Concept": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "definition": { "type": "string" },
+        "rules": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "Faction": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "goals": { "type": "array", "items": { "type": "string" } },
+        "members": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "TimelineEvent": {
+      "type": "object",
+      "required": ["event_id", "diegetic_time", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "event_id": { "type": "string" },
+        "diegetic_time": { "type": "string", "description": "Canonical timestamp in story time (ISO 8601 or relative era label)." },
+        "description": { "type": "string" },
+        "participants": { "type": "array", "items": { "type": "string" } },
+        "location_id": { "type": ["string", "null"] },
+        "consequences": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "Relationship": {
+      "type": "object",
+      "required": ["id", "entity_a_id", "entity_b_id", "relationship_type"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "entity_a_id": { "type": "string" },
+        "entity_b_id": { "type": "string" },
+        "relationship_type": { "type": "string", "description": "e.g. rivals, lovers, parent_child, employer_employee." },
+        "description": { "type": "string" },
+        "history": { "type": "string" }
+      }
+    },
+
+    "ContradictionType": {
+      "type": "string",
+      "enum": [
+        "type_mismatch",
+        "timeline_violation",
+        "spatial_violation",
+        "capability_violation",
+        "voice_violation",
+        "taboo_violation"
+      ]
+    }
+  }
+}

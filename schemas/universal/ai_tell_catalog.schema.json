@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fiction-factory/schemas/universal/ai_tell_catalog",
+  "title": "AITellCatalog",
+  "description": "Genre-agnostic patterns flagging LLM-generated prose (core-ontology-v3 §6, plus 4 patterns from MBSE craft review).",
+  "type": "object",
+  "required": ["catalog_id", "version", "patterns"],
+  "additionalProperties": false,
+  "properties": {
+    "catalog_id": { "type": "string" },
+    "version": { "type": "string" },
+    "schema_version": { "type": "string", "default": "1.0.0" },
+    "description": { "type": "string" },
+    "patterns": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/AITellPattern" },
+      "minItems": 1
+    },
+    "categories": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Enumeration of category labels used in patterns.",
+      "examples": [
+        ["punctuation_tells", "construction_tells", "hedge_tells", "cliche_tells",
+         "abstract_noun_stacking", "predictable_openers", "rhythm_tells",
+         "closing_summary_patterns", "bestseller_bot_voice", "mbse_craft_review"]
+      ]
+    }
+  },
+
+  "$defs": {
+    "Severity": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5,
+      "description": "1 = advisory; 3 = REVISE trigger at threshold; 5 = FORCE-RESOLVE or RE-PLAN."
+    },
+
+    "AITellPattern": {
+      "type": "object",
+      "required": ["pattern_id", "category", "severity", "description", "detection_method"],
+      "additionalProperties": false,
+      "properties": {
+        "pattern_id": { "type": "string", "description": "Unique slug, e.g. TELL-P-001." },
+        "category": {
+          "type": "string",
+          "enum": [
+            "punctuation_tells",
+            "construction_tells",
+            "hedge_tells",
+            "cliche_tells",
+            "abstract_noun_stacking",
+            "predictable_openers",
+            "rhythm_tells",
+            "closing_summary_patterns",
+            "bestseller_bot_voice",
+            "mbse_craft_review"
+          ]
+        },
+        "severity": { "$ref": "#/$defs/Severity" },
+        "description": { "type": "string", "description": "Plain English explanation of what this tell is and why it reads as AI-generated." },
+        "detection_method": {
+          "type": "string",
+          "enum": ["regex", "rule", "llm_critic", "statistical"],
+          "description": "How this pattern is detected."
+        },
+        "regex_or_rule": {
+          "type": ["string", "null"],
+          "description": "Regex pattern or deterministic rule expression. Null for LLM-critic-detected patterns."
+        },
+        "examples": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Synthetic (not sourced) example strings that trigger this pattern."
+        },
+        "context_required": {
+          "type": "boolean",
+          "default": false,
+          "description": "True if surrounding sentences are needed to evaluate this pattern."
+        },
+        "context_window_sentences": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "Sentences of context required when context_required = true."
+        },
+        "suggested_replacement_strategy": {
+          "type": "string",
+          "description": "How a drafter or editor should address this tell."
+        },
+        "density_ceiling_per_1k": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Maximum acceptable frequency per 1000 words before REVISE is triggered."
+        },
+        "source": {
+          "type": "string",
+          "description": "Provenance: ontology section, MBSE craft review batch, etc.",
+          "enum": ["ontology_v3_s6", "mbse_craft_review", "calibration"]
+        }
+      }
+    }
+  }
+}

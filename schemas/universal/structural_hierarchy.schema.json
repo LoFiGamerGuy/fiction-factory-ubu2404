@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fiction-factory/schemas/universal/structural_hierarchy",
+  "title": "StructuralHierarchy",
+  "description": "Unit tree of any book (core-ontology-v3 §3). Generic Unit is the shared base; Beat/Scene/Chapter/Act/Part extend it.",
+  "type": "object",
+  "required": ["book_id", "root_unit"],
+  "additionalProperties": false,
+  "properties": {
+    "book_id": { "type": "string" },
+    "version": { "type": "string", "default": "1.0.0" },
+    "root_unit": { "$ref": "#/$defs/GenericUnit" }
+  },
+
+  "$defs": {
+    "UnitType": {
+      "type": "string",
+      "enum": ["book", "part", "act", "chapter", "scene", "beat"]
+    },
+
+    "UnitState": {
+      "type": "string",
+      "enum": ["unspecced", "specced", "dirty_draft", "needs_review", "approved", "final"]
+    },
+
+    "GenericUnit": {
+      "type": "object",
+      "required": ["id", "unit_type", "position", "state"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "parent_unit_id": { "type": ["string", "null"], "default": null },
+        "position": { "type": "integer", "minimum": 1, "description": "1-based ordinal among siblings." },
+        "unit_type": { "$ref": "#/$defs/UnitType" },
+        "target_word_count": { "type": ["integer", "null"], "minimum": 1 },
+        "actual_word_count": { "type": ["integer", "null"], "minimum": 0 },
+        "function": { "type": ["string", "null"], "description": "Narrative function this unit serves." },
+        "entry_state": { "type": ["string", "null"], "description": "Diegetic world state at start of this unit." },
+        "exit_state": { "type": ["string", "null"], "description": "Diegetic world state at end of this unit." },
+        "state": { "$ref": "#/$defs/UnitState" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/GenericUnit" },
+          "description": "Ordered child units. Discriminated by unit_type."
+        },
+        "beat_data": { "$ref": "#/$defs/BeatData" },
+        "scene_data": { "$ref": "#/$defs/SceneData" },
+        "chapter_data": { "$ref": "#/$defs/ChapterData" },
+        "act_part_data": { "$ref": "#/$defs/ActPartData" }
+      }
+    },
+
+    "BeatData": {
+      "type": "object",
+      "description": "Additional fields when unit_type = beat.",
+      "additionalProperties": false,
+      "properties": {
+        "function": {
+          "type": "string",
+          "description": "Beat function label (e.g. establish_tension, reveal, deflect, payoff)."
+        },
+        "intensity": { "type": "number", "minimum": 0, "maximum": 10, "description": "Genre-defined intensity scale value." },
+        "pov_character_id": { "type": ["string", "null"] },
+        "location_id": { "type": ["string", "null"] },
+        "time_marker": { "type": ["string", "null"] },
+        "characters_present": { "type": "array", "items": { "type": "string" } },
+        "expected_reader_response": { "type": ["string", "null"] },
+        "setup_for": { "type": "array", "items": { "type": "string" }, "description": "Unit IDs this beat sets up." },
+        "payoff_of": { "type": "array", "items": { "type": "string" }, "description": "Unit IDs this beat pays off." },
+        "cause_of": { "type": "array", "items": { "type": "string" }, "description": "Unit IDs this beat causally enables." },
+        "caused_by": { "type": "array", "items": { "type": "string" }, "description": "Unit IDs that causally necessitate this beat." }
+      }
+    },
+
+    "SceneData": {
+      "type": "object",
+      "description": "Additional fields when unit_type = scene.",
+      "additionalProperties": false,
+      "properties": {
+        "goal": { "type": "string", "description": "Scene goal (MRU: Motivation-Reaction Unit goal)." },
+        "conflict": { "type": ["string", "null"], "description": "Obstacle or opposition encountered." },
+        "outcome": { "type": ["string", "null"], "description": "Scene outcome: disaster, trade-off, or success." },
+        "state_delta": {
+          "type": "object",
+          "description": "Changes to world/character state this scene commits.",
+          "additionalProperties": { "type": "string" }
+        },
+        "beats": { "type": "array", "items": { "type": "string" }, "description": "Ordered beat IDs (children of type beat)." }
+      }
+    },
+
+    "ChapterData": {
+      "type": "object",
+      "description": "Additional fields when unit_type = chapter.",
+      "additionalProperties": false,
+      "properties": {
+        "hook": { "type": ["string", "null"], "description": "Opening hook summary." },
+        "cliffhanger_required": { "type": "boolean", "default": false },
+        "pov_character_id": { "type": ["string", "null"] },
+        "scenes": { "type": "array", "items": { "type": "string" }, "description": "Ordered scene IDs." }
+      }
+    },
+
+    "ActPartData": {
+      "type": "object",
+      "description": "Additional fields when unit_type is act or part.",
+      "additionalProperties": false,
+      "properties": {
+        "arc_function": { "type": "string", "description": "e.g. setup, confrontation, resolution; genre-defined." },
+        "chapters": { "type": "array", "items": { "type": "string" }, "description": "Ordered chapter IDs." }
+      }
+    }
+  }
+}

@@ -81,6 +81,7 @@ exclude = [
 [tool.ruff]
 target-version = "py312"
 line-length = 100
+exclude = ["pipeline/schemas/universal/", "dashboard/", ".workspace/", ".venv/"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
@@ -88,6 +89,7 @@ select = ["E", "F", "I", "N", "W", "UP"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S", "ANN"]
 "scripts/**" = ["T20"]
+"pipeline/schemas/universal/**" = ["E501"]
 
 [tool.coverage.run]
 source = ["pipeline", "agents"]

@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fiction-factory/schemas/universal/voice_axes",
+  "title": "VoiceAxes",
+  "description": "Universal voice measurement axes (core-ontology-v3 §2). Values vary by author profile; axes themselves are universal and measurable on any prose.",
+  "type": "object",
+  "required": ["profile_id", "sentence_level", "lexical", "structural_prose", "punctuation_signature", "cadence", "modality_and_stance", "pov_craft", "validation"],
+  "additionalProperties": false,
+  "properties": {
+    "profile_id": { "type": "string", "description": "Author profile this voice spec belongs to." },
+    "version": { "type": "string", "default": "1.0.0" },
+
+    "sentence_level": {
+      "type": "object",
+      "required": ["sentence_length_mean", "sentence_length_std"],
+      "additionalProperties": false,
+      "properties": {
+        "sentence_length_mean": { "type": "number", "minimum": 1, "description": "Mean words per sentence." },
+        "sentence_length_std": { "type": "number", "minimum": 0, "description": "Standard deviation of words per sentence." },
+        "sentence_length_distribution": {
+          "type": "object",
+          "description": "Fraction of sentences in length buckets (1–5, 6–12, 13–20, 21–35, 36+).",
+          "properties": {
+            "very_short": { "type": "number", "minimum": 0, "maximum": 1 },
+            "short": { "type": "number", "minimum": 0, "maximum": 1 },
+            "medium": { "type": "number", "minimum": 0, "maximum": 1 },
+            "long": { "type": "number", "minimum": 0, "maximum": 1 },
+            "very_long": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "sentence_opener_distribution": {
+          "type": "object",
+          "description": "Fraction of sentences starting with each syntactic category.",
+          "properties": {
+            "subject": { "type": "number", "minimum": 0, "maximum": 1 },
+            "adverbial": { "type": "number", "minimum": 0, "maximum": 1 },
+            "participial": { "type": "number", "minimum": 0, "maximum": 1 },
+            "coordinating_conjunction": { "type": "number", "minimum": 0, "maximum": 1 },
+            "prepositional": { "type": "number", "minimum": 0, "maximum": 1 },
+            "other": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "sentence_opener_entropy_min": { "type": "number", "minimum": 0, "description": "Minimum Shannon entropy of opener distribution (diversity floor)." },
+        "sentence_mood_distribution": {
+          "type": "object",
+          "description": "Fraction of sentences in each mood.",
+          "properties": {
+            "declarative": { "type": "number", "minimum": 0, "maximum": 1 },
+            "interrogative": { "type": "number", "minimum": 0, "maximum": 1 },
+            "imperative": { "type": "number", "minimum": 0, "maximum": 1 },
+            "exclamatory": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        }
+      }
+    },
+
+    "lexical": {
+      "type": "object",
+      "required": ["lexical_diversity_target", "formality_register"],
+      "additionalProperties": false,
+      "properties": {
+        "lexical_diversity_target": {
+          "type": "object",
+          "description": "TTR/MTLD target range.",
+          "required": ["metric", "min", "target", "max"],
+          "properties": {
+            "metric": { "type": "string", "enum": ["TTR", "MTLD", "vocd_D"] },
+            "min": { "type": "number" },
+            "target": { "type": "number" },
+            "max": { "type": "number" }
+          }
+        },
+        "formality_register": {
+          "type": "string",
+          "enum": ["very_casual", "casual", "neutral", "formal", "very_formal"]
+        },
+        "rare_word_frequency": { "type": "number", "minimum": 0, "maximum": 1, "description": "Fraction of tokens with frequency rank > 10000 in reference corpus." },
+        "concrete_noun_ratio": { "type": "number", "minimum": 0, "maximum": 1, "description": "Ratio of concrete to total nouns." },
+        "sensory_token_density": {
+          "type": "object",
+          "description": "Sensory tokens per 1000 words by modality.",
+          "properties": {
+            "visual": { "type": "number", "minimum": 0 },
+            "auditory": { "type": "number", "minimum": 0 },
+            "olfactory": { "type": "number", "minimum": 0 },
+            "gustatory": { "type": "number", "minimum": 0 },
+            "tactile": { "type": "number", "minimum": 0 },
+            "proprioceptive": { "type": "number", "minimum": 0 }
+          }
+        }
+      }
+    },
+
+    "structural_prose": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dialogue_to_narration_ratio": { "type": "number", "minimum": 0, "description": "Words in dialogue tags+speech / total words. Range 0–1." },
+        "internal_monologue_share": { "type": "number", "minimum": 0, "maximum": 1, "description": "Fraction of narration that is free indirect discourse or tagged thought." },
+        "figurative_language_frequency": { "type": "number", "minimum": 0, "description": "Metaphors + similes per 1000 words." }
+      }
+    },
+
+    "punctuation_signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "em_dash_rate_max": { "type": "number", "minimum": 0, "description": "Maximum em dashes per 1000 words." },
+        "semicolon_rate": { "type": "number", "minimum": 0, "description": "Semicolons per 1000 words." },
+        "ellipsis_rate": { "type": "number", "minimum": 0, "description": "Ellipses per 1000 words." },
+        "parenthetical_rate": { "type": "number", "minimum": 0, "description": "Parenthetical phrase pairs per 1000 words." },
+        "comma_density": { "type": "number", "minimum": 0, "description": "Commas per 1000 words." }
+      }
+    },
+
+    "cadence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "short_long_alternation_index": { "type": "number", "minimum": 0, "maximum": 1, "description": "0 = monotone lengths, 1 = maximal alternation." },
+        "paragraph_length_mean": { "type": "number", "minimum": 1, "description": "Mean words per paragraph." },
+        "paragraph_length_distribution": {
+          "type": "object",
+          "properties": {
+            "single_sentence": { "type": "number", "minimum": 0, "maximum": 1 },
+            "short": { "type": "number", "minimum": 0, "maximum": 1 },
+            "medium": { "type": "number", "minimum": 0, "maximum": 1 },
+            "long": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        }
+      }
+    },
+
+    "modality_and_stance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modal_hedge_frequency": { "type": "number", "minimum": 0, "description": "Modal verbs (could, might, would, etc.) per 1000 words." },
+        "adverb_density": { "type": "number", "minimum": 0, "description": "Adverbs per 1000 words." },
+        "adjective_stacking_max": { "type": "integer", "minimum": 1, "description": "Maximum consecutive pre-nominal adjectives before flagging." }
+      }
+    },
+
+    "pov_craft": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pov_distance_default": {
+          "type": "string",
+          "enum": ["deep", "moderate", "shallow", "omniscient"],
+          "description": "Default psychic distance for this author's POV."
+        },
+        "narrator_intrusion_frequency": { "type": "number", "minimum": 0, "description": "Authorial narrator intrusions per chapter (0 = pure close third/first)." },
+        "time_of_narration": {
+          "type": "string",
+          "enum": ["immediate", "retrospective", "mixed"]
+        }
+      }
+    },
+
+    "validation": {
+      "type": "object",
+      "description": "Convergence criteria for voice fidelity.",
+      "required": ["voice_distance_threshold"],
+      "additionalProperties": false,
+      "properties": {
+        "voice_distance_threshold": { "type": "number", "minimum": 0, "maximum": 1, "description": "Maximum aggregate voice distance (normalized) before REVISE." },
+        "blacklisted_constructions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Regex patterns for constructions never used by this author."
+        },
+        "whitelisted_constructions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["pattern", "min_frequency_per_10k"],
+            "properties": {
+              "pattern": { "type": "string" },
+              "min_frequency_per_10k": { "type": "number" }
+            }
+          }
+        },
+        "tolerance_band_sigma": { "type": "number", "default": 1.5, "description": "Axis value must be within ±N sigma of profile target to pass." }
+      }
+    }
+  }
+}

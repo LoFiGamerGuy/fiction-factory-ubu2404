@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fiction-factory/schemas/universal/specificity_heuristics",
+  "title": "SpecificityHeuristics",
+  "description": "Quantitative specificity targets per scene (core-ontology-v3 §7). Low specificity is a REVISE trigger.",
+  "type": "object",
+  "required": ["profile_id"],
+  "additionalProperties": false,
+  "properties": {
+    "profile_id": {
+      "type": "string",
+      "description": "Genre/Author profile ID this heuristic set belongs to."
+    },
+    "version": { "type": "string", "default": "1.0.0" },
+    "schema_version": { "type": "string", "default": "1.0.0" },
+
+    "concrete_noun_count_per_scene": {
+      "type": "object",
+      "description": "Target range for number of concrete nouns per scene.",
+      "required": ["floor"],
+      "additionalProperties": false,
+      "properties": {
+        "floor": { "type": "integer", "minimum": 0 },
+        "target": { "type": ["integer", "null"], "minimum": 0 },
+        "ceiling": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+
+    "proper_noun_density": {
+      "type": "object",
+      "description": "Proper nouns per 1000 words — names, places, brands anchor the reader in a specific world.",
+      "required": ["floor"],
+      "additionalProperties": false,
+      "properties": {
+        "floor": { "type": "number", "minimum": 0 },
+        "target": { "type": ["number", "null"] },
+        "ceiling": { "type": ["number", "null"] }
+      }
+    },
+
+    "sensory_anchor_frequency": {
+      "type": "object",
+      "description": "Sensory anchors per 1000 words by modality.",
+      "additionalProperties": false,
+      "properties": {
+        "visual": { "$ref": "#/$defs/FrequencyBand" },
+        "auditory": { "$ref": "#/$defs/FrequencyBand" },
+        "olfactory": { "$ref": "#/$defs/FrequencyBand" },
+        "gustatory": { "$ref": "#/$defs/FrequencyBand" },
+        "tactile": { "$ref": "#/$defs/FrequencyBand" },
+        "proprioceptive": { "$ref": "#/$defs/FrequencyBand" },
+        "any_modality_floor": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Minimum total sensory anchors across all modalities per 1000 words."
+        }
+      }
+    },
+
+    "cultural_specificity_index": {
+      "type": "object",
+      "description": "Fraction of culturally-specific nouns (brand names, institutions, regional slang, era markers) among all nouns.",
+      "additionalProperties": false,
+      "properties": {
+        "floor": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "target": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+      }
+    },
+
+    "temporal_anchoring": {
+      "type": "object",
+      "description": "At least one explicit temporal anchor per N scenes.",
+      "additionalProperties": false,
+      "properties": {
+        "required_per_n_scenes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "A time anchor (day, hour, season, era marker) must appear at least once per this many scenes."
+        }
+      }
+    },
+
+    "spatial_anchoring": {
+      "type": "object",
+      "description": "Scene-opening spatial grounding requirement.",
+      "additionalProperties": false,
+      "properties": {
+        "must_establish_within_words": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "A location anchor must appear within the first N words of a scene."
+        }
+      }
+    }
+  },
+
+  "$defs": {
+    "FrequencyBand": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "floor": { "type": ["number", "null"], "minimum": 0 },
+        "target": { "type": ["number", "null"], "minimum": 0 },
+        "ceiling": { "type": ["number", "null"], "minimum": 0 }
+      }
+    }
+  }
+}
