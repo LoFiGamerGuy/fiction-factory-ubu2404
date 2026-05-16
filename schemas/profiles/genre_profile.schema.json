@@ -127,6 +127,37 @@
       }
     },
 
+    "heat_curve": {
+      "type": "string",
+      "enum": ["rising", "steep", "plateau", "flat"],
+      "description": "Pacing pattern for intimacy intensity across the book (rising=gradual build, steep=fast early escalation)."
+    },
+
+    "interiority_budget_pct_max": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Maximum share of words devoted to internal monologue / interiority."
+    },
+
+    "exposition_budget_pct_max": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Maximum share of words devoted to exposition."
+    },
+
+    "sex_scene_frequency_min": {
+      "type": "string",
+      "description": "Minimum sex scene frequency constraint (e.g. '1_per_3_chapters')."
+    },
+
+    "escalation_rules": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Rules governing act_type escalation across sex scenes (e.g. no_repeated_act_within_3_scenes)."
+    },
+
     "trope_library": {
       "type": "array",
       "items": {

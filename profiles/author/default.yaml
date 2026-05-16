@@ -1,0 +1,108 @@
+# ==============================================================================
+# DEFAULT AUTHOR PROFILE — PLACEHOLDER
+# ==============================================================================
+# This is a placeholder profile. Fill in your voice axes before first
+# production run. All numeric values below are generic mid-range defaults
+# and will NOT reflect your actual voice.
+#
+# Guidance: See docs/profile-axis-framework-v2.md for measurement methodology.
+# Voice axes are measured from your existing prose corpus via the calibration
+# pipeline (Phase 14). Until calibration runs, these defaults produce
+# statistically average genre fiction prose — functional but not distinctive.
+#
+# After calibration:
+#   1. Replace numeric values with your measured axis values.
+#   2. Update calibration_history with the run_id returned by the calibration agent.
+#   3. Set version to "1.0" and update profile_id.
+# ==============================================================================
+
+profile_id: author_default_placeholder
+version: "0.1"
+display_name: "Placeholder Author"
+
+voice_axes:
+  sentence_level:
+    # Average words per sentence. Romance genre typically 12-18.
+    length_mean_words: 14.0
+    # Standard deviation — higher = more varied rhythm.
+    length_std_words: 5.0
+    # Shannon entropy floor for sentence openers (prevents anaphora loops).
+    opener_entropy_min: 0.5
+    mood_distribution:
+      declarative: 0.60
+      interrogative: 0.15
+      imperative: 0.10
+      exclamatory: 0.05
+
+  lexical:
+    diversity_metric: MTLD
+    # MTLD score; genre romance typically 65-85.
+    diversity_target: 72.0
+    formality_register: casual
+    # Proportion of tokens appearing <5 times per million words.
+    rare_word_frequency: 0.03
+    # Proportion of nouns that are concrete (not abstract).
+    concrete_noun_ratio: 0.55
+
+  syntactic:
+    subordinate_clause_rate: 0.25
+    parallel_structure_rate: 0.10
+    # Upper bound on passive voice usage.
+    passive_voice_rate_max: 0.08
+
+  dialogue:
+    # Ratio of dialogue words to narration words.
+    to_narration_ratio: 0.45
+    internal_monologue_share: 0.20
+    tag_style: minimal
+
+  sensory:
+    # Sensory tokens per 1000 words by modality.
+    visual: 15.0
+    auditory: 8.0
+    olfactory: 3.0
+    gustatory: 2.0
+    tactile: 10.0
+    proprioceptive: 4.0
+
+  pacing:
+    paragraph_length_mean_words: 45.0
+    # 0=monotone, 1=perfectly alternating short/long.
+    short_long_alternation_index: 0.55
+
+  metaphor:
+    figurative_per_1k: 8.0
+    domain_bias: [nature, color, light]
+
+  subtext:
+    modal_hedge_per_1k: 4.0
+    # Adverb tokens per 1000 words.
+    adverb_density: 3.5
+    # Max adjectives stacked before a noun.
+    adjective_stacking_max: 2
+
+  cadence:
+    em_dash_per_1k_max: 3.0
+    semicolon_per_1k: 0.5
+    ellipsis_per_1k: 1.0
+
+# Regex patterns for constructions this author never uses.
+# Add per-author forbidden patterns here.
+forbidden_constructions: []
+
+# Weight (0.0-1.0) assigned to each voice axis group when computing
+# aggregate fidelity distance. Weights are relative; they do not need to sum to 1.
+# Increase weight for axes that define your voice most distinctively.
+enforcement_weights:
+  sentence_level: 0.15
+  lexical: 0.15
+  syntactic: 0.10
+  dialogue: 0.15
+  sensory: 0.15
+  pacing: 0.10
+  metaphor: 0.10
+  subtext: 0.10
+  cadence: 0.00
+
+# Populated by the calibration agent (Phase 14). Do not edit manually.
+calibration_history: []

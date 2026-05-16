@@ -1,0 +1,61 @@
+# ==============================================================================
+# DEFAULT SENSITIVITY PROFILE — PERMISSIVE BASELINE
+# ==============================================================================
+# This is the permissive baseline sensitivity profile for adult fiction.
+# It defines the absolute floor: policies that cannot be lowered by any
+# Goal profile (sacred = true).
+#
+# USER ACTION REQUIRED PER SERIES:
+#   Tighten this profile per series in your series spec. Do not run a series
+#   intended for a restricted audience (e.g., YA, sweet romance) on the
+#   default profile. max_heat_level can only be *lowered* (never raised)
+#   by overriding this profile at the series level.
+#
+# ABSOLUTE SACRED FLOOR (minors_in_sexual_context: prohibit):
+#   This policy cannot be overridden by any other profile or precedence rule.
+#   Any Goal profile that attempts to loosen this prohibition will raise
+#   a SensitivityViolation and abort the run.
+#
+# HARD THRESHOLDS (sacred):
+#   max_heat_level: 5 — permissive default for adult erotica/explicit romance.
+#     Tighten to 3 for "sensual on-page only" or 2 for sweet closed-door.
+#   max_violence_intensity: 5 — permissive default for thriller/dark fiction.
+#     Tighten per series. Goal profile cannot raise these values.
+# ==============================================================================
+
+profile_id: sensitivity_default
+version: "1.0"
+sacred: true
+
+content_domain_policies:
+  sexual_content: allow
+  violence: allow
+  profanity: allow
+  substance_use: allow
+  # SACRED FLOOR — absolute prohibition. Cannot be overridden by Goal profile.
+  minors_in_sexual_context: prohibit
+  # Dark themes allowed with constraints — critic review required before publish.
+  self_harm: allow_with_constraints
+  child_harm: prohibit
+
+vocabulary_restrictions: []
+  # Add per-series restrictions here. Example:
+  # - term_or_regex: "\\bslur_pattern\\b"
+  #   restriction_level: prohibited
+  #   notes: Series-specific vocabulary restriction.
+
+audience_markers:
+  - adult_unrestricted
+
+hard_thresholds:
+  # Sacred: Goal profile cannot raise these values. User may lower them per series.
+  max_heat_level: 5
+  max_violence_intensity: 5
+
+auto_content_warnings:
+  - adult_content_18_plus
+
+representation_policy:
+  authenticity_requirements:
+    - marginalized_groups_require_sensitivity_review_before_publication
+  language_restrictions: []

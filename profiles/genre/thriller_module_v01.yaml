@@ -1,0 +1,119 @@
+# ==============================================================================
+# THRILLER MODULE v0.1 — SCAFFOLD ONLY
+# ==============================================================================
+# WARNING: NOT production-validated. This is a scaffold profile.
+#   genre_module_status: scaffold
+#
+# DO NOT use for production manuscript generation until a working author
+# validates the scene slots, quality gates, and structural conventions
+# against a complete thriller manuscript.
+#
+# See IMPLEMENTATION_PLAN.md Phase 5 notes for scaffold-to-validated
+# promotion criteria. See tasks/task-005-profile-library.md §T5.4.
+#
+# Placeholder fields below (for thriller engine integration — Phase 7+):
+#   knowledge_state_per_character:  List of character-specific knowledge
+#     states at each scene. Drives POV information asymmetry tracking.
+#   evidence_object_ledger:         Physical evidence items introduced,
+#     transferred, and resolved. Feeds continuity critic.
+#   relationship_entries_true_vs_performed:  Per-character true vs.
+#     performed relationship state (e.g., undercover detective).
+#   thriller_engine_block_per_scene:  Per-scene thriller engine config
+#     (stakes, clock status, information drop / withhold decision).
+#
+# These fields will be added to the genre_profile schema in a future
+# phase when the thriller module matures to 'validated' status.
+# ==============================================================================
+
+profile_id: genre_thriller_v01_scaffold
+version: "0.1"
+genre_name: thriller
+genre_module_status: scaffold
+
+scene_function_vocabulary:
+  - character_introduction
+  - inciting_incident
+  - investigation_scene
+  - information_drop
+  - red_herring
+  - ticking_clock
+  - chase_scene
+  - confrontation
+  - midpoint_revelation
+  - false_resolution
+  - climax
+  - resolution
+
+required_scene_slots:
+  - slot_id: inciting_incident
+    description: >
+      The event that launches the protagonist into the thriller's central
+      conflict. Stakes must be clear: life, freedom, or justice at risk.
+    target_chapter_range:
+      min: 1
+      max: 3
+    required: true
+
+  - slot_id: midpoint_revelation
+    description: >
+      Major revelation at ~50% that reframes the central threat and forces
+      a shift in protagonist strategy. Raises the stakes.
+    target_chapter_range:
+      min: 12
+      max: 20
+    required: true
+
+  - slot_id: climax
+    description: >
+      Final confrontation with the primary antagonist or threat. Highest
+      tension in the manuscript.
+    target_chapter_range:
+      min: 23
+      max: 32
+    required: true
+
+  - slot_id: resolution
+    description: >
+      Aftermath and reestablishment of a new equilibrium. All opened
+      promise threads resolved.
+    target_chapter_range:
+      min: 25
+      max: 35
+    required: true
+
+# Scaffold: quality gates empty — define when module is validated.
+quality_gates: []
+
+self_audit_rubric:
+  - item_id: stakes_clarity
+    question: Are the stakes for this scene clear and proportional to the plot position?
+    weight: 0.40
+  - item_id: information_balance
+    question: Does this scene give the reader the right information at the right time?
+    weight: 0.35
+  - item_id: pacing
+    question: Does the scene maintain thriller pacing without sacrificing character clarity?
+    weight: 0.25
+
+heat_scale:
+  min: 1
+  max: 3
+
+structural_conventions:
+  word_count_range:
+    min: 70000
+    max: 120000
+  chapter_count_range:
+    min: 25
+    max: 45
+  act_structure: three_act
+  pov_default: close_third
+  tense_default: past
+
+# Scaffold trope library — populate when validating.
+trope_library: []
+
+reader_contract:
+  - mystery_resolved
+  - protagonist_survives_or_falls_meaningfully
+  - no_unearned_deus_ex_machina

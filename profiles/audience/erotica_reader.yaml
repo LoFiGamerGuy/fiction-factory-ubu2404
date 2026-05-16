@@ -1,0 +1,100 @@
+# ==============================================================================
+# EROTICA READER AUDIENCE PROFILE
+# ==============================================================================
+# Primary use: erotica_module_v1 + kdp_commercial pentad
+# Three reader personas representing the erotic romance reader distribution.
+# Weighted toward heat-seeking and pacing readers per market data.
+# ==============================================================================
+
+profile_id: audience_erotica_reader
+version: "1.0"
+
+reader_lens: >
+  Adult reader of explicit erotic romance. Expects explicit sexual content
+  to appear early (by chapter 2) and escalate in variety and intensity.
+  Values sensory immersion and act-type diversity over plot complexity.
+  Will DNF if heat stalls, if the same act type repeats without variation,
+  or if heat drops post-peak without plot justification.
+
+tolerance_bands:
+  # Plot and character complexity — lower tolerance than romance reader
+  complexity:
+    min: 0.0
+    max: 0.5
+  # Emotional darkness
+  darkness:
+    min: 0.0
+    max: 0.7
+  # Heat level — high floor; reader expects explicit content
+  heat_level:
+    min: 0.7
+    max: 1.0
+  # Act-type repetition — very low tolerance for repetition
+  act_type_repetition:
+    min: 0.0
+    max: 0.2
+
+expectation_set:
+  - explicit_content_by_chapter_2
+  - escalating_heat_throughout
+  - act_type_variety_required
+  - hea_or_hfn
+  - consent_arc_present
+
+trigger_sets:
+  dnf_triggers:
+    - same_act_type_repeated_within_3_consecutive_sex_scenes
+    - heat_drops_after_peak_without_plot_reason
+    - no_explicit_scene_by_chapter_3
+    - heat_stalls_at_sensual_level
+    - non_consensual_presented_approvingly
+
+  satisfaction_triggers:
+    - escalation_clear_and_steady
+    - sensory_density_high_throughout
+    - act_type_variety_demonstrated
+    - emotional_stakes_present_through_physical_scenes
+    - earned_hea_or_hfn
+
+reader_personas:
+  - persona_id: heat_seeker
+    name: Heat Seeker
+    description: >
+      Reads for explicit sexual content and escalation. Expects the first
+      sex scene by chapter 2 at the latest. Marks DNF if heat stalls or
+      if the book retreats to sensual-only after establishing explicit scenes.
+      Act-type variety is non-negotiable — repetition registers as lazy writing.
+    weight: 0.45
+    reading_preferences:
+      first_scene_by_chapter: 2
+      escalation_required: true
+      act_type_variety: essential
+      heat_floor: 4
+
+  - persona_id: pacing_reader
+    name: Pacing Reader
+    description: >
+      Cares about escalation structure. Wants each sexual encounter to
+      feel distinct and progressive — not the same beats repeated.
+      Sensitive to act-type repetition and will note when the climax scene
+      (high-heat peak) doesn't feel earned by the buildup.
+    weight: 0.35
+    reading_preferences:
+      escalation_structure: strict
+      act_type_repetition_tolerance: none
+      payoff_must_be_earned: true
+      interiority_tolerance: low
+
+  - persona_id: world_reader
+    name: World Reader
+    description: >
+      Cares about character consistency through sex scenes. Characters
+      must remain recognizable in their voice and emotional state during
+      and after physical scenes. The post-explicit emotional beat is
+      as important as the scene itself.
+    weight: 0.20
+    reading_preferences:
+      character_consistency_through_scenes: essential
+      post_scene_emotional_processing: valued
+      consent_arc: required
+      interiority_balance: moderate

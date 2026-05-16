@@ -1,0 +1,205 @@
+# ==============================================================================
+# ROMANCE MODULE v1.0 — PRODUCTION VALIDATED
+# ==============================================================================
+# Genre: Contemporary / Category Romance
+# Status: validated — production-ready for commercial fiction runs
+# Source authority: MBSE Craft Reviews Acceptance §2.1 (romance module spec)
+#
+# Heat curve: Rising. Heat level begins at 1 (sweet) at chapter open, builds
+# gradually to target heat level (≤ max_heat_level from sensitivity profile)
+# by midpoint; sex scenes required at heat_level ≥ 3.
+#
+# Consent arc: Required. Every intimacy escalation must track explicit consent
+# markers. Violations are taboo-level failures.
+# ==============================================================================
+
+profile_id: genre_romance_v1
+version: "1.0"
+genre_name: romance
+genre_module_status: validated
+
+# Heat pacing across the book
+heat_curve: rising
+
+scene_function_vocabulary:
+  - meet_cute
+  - setup_tension
+  - inciting_romantic_conflict
+  - character_establishment
+  - first_charged_moment
+  - first_kiss
+  - sexual_tension
+  - intimacy_escalation
+  - explicit_scene
+  - aftermath_bonding
+  - emotional_revelation
+  - midpoint_emotional_peak
+  - dark_moment
+  - black_moment
+  - grand_gesture
+  - hea_resolution
+  - hfn_resolution
+  - subplot_complication
+  - subplot_resolution
+  - backstory_reveal
+  - world_building
+
+required_scene_slots:
+  - slot_id: meet_cute
+    description: >
+      Hero and heroine meet under charged circumstances; chemistry must be
+      established or clearly seeded. Reader contract on romantic tension opens here.
+    target_chapter_range:
+      min: 1
+      max: 2
+    required: true
+
+  - slot_id: inciting_romantic_conflict
+    description: >
+      First substantial obstacle to the romantic relationship. Establishes
+      the central wound or misbelief that must be resolved by HEA.
+    target_chapter_range:
+      min: 3
+      max: 7
+    required: true
+
+  - slot_id: midpoint_emotional_peak
+    description: >
+      Emotional high point at approximately 50% of book. False resolution
+      or deepened connection that raises intimacy stakes before the dark moment.
+    target_chapter_range:
+      min: 12
+      max: 18
+    required: true
+
+  - slot_id: black_moment
+    description: >
+      All-is-lost moment. The romantic relationship appears irrevocably broken.
+      Must occur at approximately 70% of the book and arise from the central wound.
+    target_chapter_range:
+      min: 18
+      max: 25
+    required: true
+
+  - slot_id: grand_gesture
+    description: >
+      One or both protagonists make a decisive, cost-bearing action to claim
+      the relationship. Must be earned by character growth, not convenient plot.
+    target_chapter_range:
+      min: 22
+      max: 30
+    required: true
+
+  - slot_id: hea_or_hfn_resolution
+    description: >
+      Happily Ever After or Happy For Now resolution. All opened romantic
+      promises must be resolved. Emotional debt collected.
+    target_chapter_range:
+      min: 25
+      max: 35
+    required: true
+
+quality_gates:
+  - gate_id: convention_compliance
+    metric: convention_compliance_score
+    threshold: 0.90
+    operator: gte
+    description: Required scene slots present at specified positions; reader contract fulfilled.
+
+  - gate_id: promise_resolution_rate
+    metric: promise_resolution_rate
+    threshold: 1.0
+    operator: eq
+    description: Every opened romance promise must be resolved before the final chapter.
+
+  - gate_id: pacing_score
+    metric: pacing_score
+    threshold: 0.80
+    operator: gte
+    description: Heat curve progression within expected range; black moment at correct position.
+
+self_audit_rubric:
+  - item_id: emotional_stakes
+    question: Does this scene raise or deepen emotional stakes for the romantic arc?
+    weight: 0.30
+
+  - item_id: romantic_tension
+    question: Is romantic tension present, advanced, or earned in this scene?
+    weight: 0.25
+
+  - item_id: character_consistency
+    question: Do both protagonists act consistently with their established wound and voice?
+    weight: 0.25
+
+  - item_id: promise_progress
+    question: Does this scene advance, open, or close a tracked romance promise?
+    weight: 0.20
+
+heat_scale:
+  min: 1
+  max: 5
+  anchor_definitions:
+    "1": sweet_closed_door
+    "2": sensual_off_page
+    "3": sensual_on_page
+    "4": explicit
+    "5": erotic
+
+structural_conventions:
+  word_count_range:
+    min: 60000
+    max: 110000
+  chapter_count_range:
+    min: 25
+    max: 35
+  act_structure: three_act
+  pov_default: close_third
+  tense_default: past
+
+trope_library:
+  - trope_id: consent_arc
+    name: Consent Arc
+    category: must_have
+    required_beats:
+      - explicit_consent_marker
+      - enthusiastic_participation
+      - post_scene_emotional_processing
+
+  - trope_id: hea_or_hfn
+    name: Happily Ever After or Happy For Now
+    category: must_have
+    required_beats:
+      - declaration
+      - commitment_demonstrated
+      - emotional_resolution
+
+  - trope_id: enemies_to_lovers
+    name: Enemies to Lovers
+    category: commonly_loved
+    required_beats: [first_clash, grudging_respect, hate_to_attraction, declaration]
+
+  - trope_id: forced_proximity
+    name: Forced Proximity
+    category: commonly_loved
+    required_beats: [situational_lock, tension_peak, vulnerability_revealed]
+
+  - trope_id: second_chance
+    name: Second Chance Romance
+    category: commonly_loved
+    required_beats: [reunion, wound_reopened, accountability_demonstrated, forgiveness]
+
+  - trope_id: cheating_without_full_redemption
+    name: Cheating Without Full Redemption Arc
+    category: taboo
+    required_beats: []
+
+  - trope_id: unhealthy_power_dynamic_uncritical
+    name: Unhealthy Power Dynamic Presented Uncritically
+    category: taboo
+    required_beats: []
+
+reader_contract:
+  - romantic_tension
+  - emotional_debt
+  - hea_or_hfn
+  - consent_arc

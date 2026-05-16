@@ -1,0 +1,119 @@
+# ==============================================================================
+# ROMANCE READER AUDIENCE PROFILE
+# ==============================================================================
+# Primary use: romance_module_v1 + kdp_commercial pentad
+# Four reader personas representing the KU romance reader distribution.
+# Persona weights should sum to approximately 1.0 for normalized scoring,
+# but this is not enforced by the schema.
+# ==============================================================================
+
+profile_id: audience_romance_reader
+version: "1.0"
+
+reader_lens: >
+  Adult romance reader seeking emotional investment, satisfying HEA or HFN,
+  and heat that builds naturally. Values character depth and emotional arc
+  over plot complexity. Will DNF if romantic tension is absent or the HEA
+  seems impossible past the 75% mark.
+
+tolerance_bands:
+  # Narrative complexity (subplot depth, POV count, timeline non-linearity)
+  complexity:
+    min: 0.1
+    max: 0.6
+  # Emotional darkness (grief, abuse themes, trauma)
+  darkness:
+    min: 0.0
+    max: 0.5
+  # Ambiguity in character motivation or ending
+  ambiguity:
+    min: 0.0
+    max: 0.3
+  # Heat level (0=sweet, 1=max erotic)
+  heat_level:
+    min: 0.2
+    max: 1.0
+  # Slow burn pacing before first romantic payoff
+  slow_burn:
+    min: 0.2
+    max: 0.8
+
+expectation_set:
+  - hea_required
+  - no_cliffhanger_endings
+  - romantic_tension_must_resolve
+  - consent_arc_present
+  - no_cheating_without_redemption
+
+trigger_sets:
+  dnf_triggers:
+    - no_romantic_tension_by_chapter_3
+    - hea_seems_impossible_at_75pct_mark
+    - hero_dies_permanently
+    - no_hea_or_hfn
+    - cheating_without_full_resolution
+    - non_consensual_presented_approvingly
+
+  satisfaction_triggers:
+    - chemistry_established_by_chapter_2
+    - grand_gesture_lands
+    - earned_hea
+    - banter_present
+    - emotional_payoff_collected
+    - character_growth_visible_before_hea
+
+reader_personas:
+  - persona_id: target_demo
+    name: Target Demo
+    description: >
+      KU subscriber who reads 3+ romance novels per month. Knows genre
+      expectations deeply but reads for emotional experience, not
+      intellectual challenge. Low ambiguity tolerance. Will DNF at first
+      sign of unresolved romantic tension by chapter 3.
+    weight: 0.40
+    reading_preferences:
+      reading_frequency: 3_plus_per_month
+      platform: kindle_unlimited
+      heat_preference: steamy_to_explicit
+      pov: close_third
+      hea_required: true
+      cliffhanger_tolerance: false
+
+  - persona_id: genre_veteran
+    name: Genre Veteran
+    description: >
+      Deeply familiar with romance tropes across subgenres. Catches
+      continuity errors, recognizes clichéd execution, rewards fresh
+      takes on classic tropes. Marks DNF if required trope beats
+      are mishandled or the consent arc is absent.
+    weight: 0.25
+    reading_preferences:
+      trope_awareness: high
+      continuity_sensitivity: high
+      fresh_execution_valued: true
+      heat_preference: any
+
+  - persona_id: emotional_probe
+    name: Emotional Probe
+    description: >
+      Tracks the emotional affect arc beat by beat. Marks satisfaction
+      if and only if the emotional payoff lands — character vulnerability
+      feels earned, the dark moment genuinely damages the relationship,
+      and the HEA is won rather than given.
+    weight: 0.20
+    reading_preferences:
+      emotional_depth_required: true
+      payoff_must_be_earned: true
+      vulnerability_valued: true
+
+  - persona_id: detail_reader
+    name: Detail Reader
+    description: >
+      Catches continuity errors in character details, setting geography,
+      and timeline. Values specificity — generic descriptions register
+      as low effort. Notices AI-pattern prose (hedging, filler phrases).
+    weight: 0.15
+    reading_preferences:
+      continuity_sensitivity: very_high
+      specificity_valued: true
+      ai_tell_sensitivity: high

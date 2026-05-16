@@ -1,0 +1,218 @@
+# ==============================================================================
+# EROTICA MODULE v1.0 — PRODUCTION VALIDATED
+# ==============================================================================
+# Genre: Erotic Romance / High-Heat Contemporary
+# Status: validated — production-ready
+# Source authority: decisions.md 2026-05-14 §2.4 LOCKED
+#   "Erotica is a parameterization within the commercial track — not a
+#    separate track."
+#
+# Key distinctions from romance_module_v1:
+#   - heat_curve: steep (first sex scene required by chapter 2)
+#   - interiority_budget_pct_max: 0.20 (vs unconstrained in romance)
+#   - exposition_budget_pct_max: 0.15 (tight; momentum must be maintained)
+#   - sex_scene_frequency_min: 1_per_3_chapters
+#   - escalation_rules: no repeated act_type within last 3 sex scenes
+#   - word_count_range: 40000-80000 (shorter, denser)
+#
+# NOTE ON SENSITIVITY LIMITS:
+#   This genre profile sets pacing *targets* within the sensitivity profile's
+#   hard limits. The sensitivity profile controls the ultimate ceiling.
+#   max_heat_level in the active sensitivity profile must be ≥ 5 for this
+#   genre module to operate within design parameters.
+# ==============================================================================
+
+profile_id: genre_erotica_v1
+version: "1.0"
+genre_name: erotica
+genre_module_status: validated
+
+# Steep: first explicit sex scene required by chapter 2; escalation is rapid.
+heat_curve: steep
+
+# Maximum share of words devoted to internal monologue / interiority.
+# Enforced by LedgerManager.budget_remaining(); lower than romance to
+# maintain momentum and sensory immersion.
+interiority_budget_pct_max: 0.20
+
+# Maximum share of words devoted to exposition.
+exposition_budget_pct_max: 0.15
+
+# Minimum sex scene frequency across the manuscript.
+sex_scene_frequency_min: "1_per_3_chapters"
+
+# IntimacyEscalationLedger enforcement rules.
+escalation_rules:
+  - no_repeated_act_type_within_last_3_scenes
+  - sequential_ladder_required
+
+scene_function_vocabulary:
+  - character_establishment
+  - meet_cute
+  - setup_tension
+  - first_charged_moment
+  - sexual_tension
+  - first_explicit
+  - intimacy_escalation
+  - explicit_scene
+  - escalation_peak
+  - post_explicit_emotional_beat
+  - aftermath_bonding
+  - inciting_romantic_conflict
+  - emotional_revelation
+  - midpoint_emotional_peak
+  - dark_moment
+  - black_moment
+  - grand_gesture
+  - hea_resolution
+  - hfn_resolution
+  - subplot_complication
+  - subplot_resolution
+
+required_scene_slots:
+  - slot_id: first_explicit
+    description: >
+      First explicit sex scene. Must appear by chapter 2. Sets the heat
+      ceiling expectation for the reader; consent markers required.
+    target_chapter_range:
+      min: 1
+      max: 2
+    required: true
+
+  - slot_id: escalation_peak
+    description: >
+      Highest-heat scene in the manuscript. Must represent a genuine
+      escalation from previous scenes via act_type variety.
+    target_chapter_range:
+      min: 10
+      max: 20
+    required: true
+
+  - slot_id: midpoint_emotional_peak
+    description: >
+      Emotional high point at approximately 50% of book. May coincide
+      with a sex scene but must carry emotional weight beyond physical.
+    target_chapter_range:
+      min: 9
+      max: 15
+    required: true
+
+  - slot_id: black_moment
+    description: >
+      All-is-lost moment for the romantic relationship. Must arise from
+      character wound, not convenient plot contrivance.
+    target_chapter_range:
+      min: 14
+      max: 20
+    required: true
+
+  - slot_id: hea_or_hfn_resolution
+    description: >
+      Happily Ever After or Happy For Now resolution. All opened promises
+      resolved; emotional debt collected.
+    target_chapter_range:
+      min: 18
+      max: 28
+    required: true
+
+quality_gates:
+  - gate_id: convention_compliance
+    metric: convention_compliance_score
+    threshold: 0.90
+    operator: gte
+    description: Required scene slots present; heat curve steep from chapter 1.
+
+  - gate_id: promise_resolution_rate
+    metric: promise_resolution_rate
+    threshold: 1.0
+    operator: eq
+    description: All romance promises must resolve.
+
+  - gate_id: escalation_compliance
+    metric: escalation_compliance_score
+    threshold: 0.85
+    operator: gte
+    description: Act-type variety upheld; no repeated act within last 3 sex scenes.
+
+  - gate_id: sensory_density
+    metric: sensory_density_per_1k
+    threshold: 12.0
+    operator: gte
+    description: Elevated sensory density required throughout explicit scenes.
+
+self_audit_rubric:
+  - item_id: heat_progress
+    question: Does this scene advance heat level or introduce act-type variety?
+    weight: 0.35
+
+  - item_id: sensory_immersion
+    question: Is sensory density elevated; does physical choreography feel concrete?
+    weight: 0.30
+
+  - item_id: character_consistency
+    question: Do characters act consistently with established voice through physical scenes?
+    weight: 0.20
+
+  - item_id: consent_markers
+    question: Are consent markers present and enthusiastic?
+    weight: 0.15
+
+heat_scale:
+  min: 1
+  max: 5
+  anchor_definitions:
+    "1": sweet_closed_door
+    "2": sensual_off_page
+    "3": sensual_on_page
+    "4": explicit
+    "5": erotic
+
+structural_conventions:
+  word_count_range:
+    min: 40000
+    max: 80000
+  chapter_count_range:
+    min: 15
+    max: 28
+  act_structure: three_act
+  pov_default: close_third
+  tense_default: past
+
+trope_library:
+  - trope_id: consent_arc
+    name: Consent Arc
+    category: must_have
+    required_beats:
+      - explicit_consent_marker
+      - enthusiastic_participation
+      - post_scene_emotional_processing
+
+  - trope_id: escalation_arc
+    name: Escalation Arc
+    category: must_have
+    required_beats:
+      - first_explicit
+      - variety_demonstrated
+      - escalation_peak
+      - emotional_integration
+
+  - trope_id: hea_or_hfn
+    name: Happily Ever After or Happy For Now
+    category: must_have
+    required_beats: [declaration, commitment_demonstrated, emotional_resolution]
+
+  - trope_id: minors_in_sexual_context
+    name: Minors in Sexual Context
+    category: taboo
+    required_beats: []
+
+  - trope_id: non_consensual_presented_approvingly
+    name: Non-Consensual Activity Presented Approvingly
+    category: taboo
+    required_beats: []
+
+reader_contract:
+  - explicit_content_sustained
+  - escalation_arc
+  - hea_or_hfn
+  - consent_arc
