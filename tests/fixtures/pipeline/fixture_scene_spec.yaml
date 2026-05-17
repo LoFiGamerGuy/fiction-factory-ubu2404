@@ -1,0 +1,15 @@
+scene_id: ch01_sc01
+chapter_id: 1
+act: 1
+scene_function: meet_cute
+word_count_target: 1200
+heat_level: 1
+scene_brief: >
+  Elena meets Marcus for the first time at a rainy bookshop.
+  She is reaching for the same book. Their hands brush.
+  Sparks. She is guarded. He is charming but not pushy.
+  End the scene with her walking away, unsettled.
+characters:
+  - Elena
+  - Marcus
+location: "Rainy Day Books, Portland"

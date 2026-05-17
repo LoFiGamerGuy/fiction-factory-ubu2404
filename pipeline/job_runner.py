@@ -1,0 +1,176 @@
+"""JobRunner — thin orchestrator over SceneStateMachine.
+
+Builds the initial SceneState from a JobContext and wires up all agents.
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from typing import Any
+
+from pipeline.agents.quality_agent import QualityAgent
+from pipeline.agents.writer_agent import WriterAgent
+from pipeline.convergence_controller import ConvergenceController
+from pipeline.core.agent_context import AgentContext
+from pipeline.core.job_context import JobContext
+from pipeline.core.model_router import ModelRouter
+from pipeline.scene_state_machine import SceneState, SceneStateMachine
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SceneRunResult:
+    scene_id: str
+    job_id: str
+    final_text: str
+    force_resolved: bool
+    convergence_decision: str
+    revise_count: int
+    error: str
+    final_state: SceneState
+
+
+class JobRunner:
+    """Runs a single scene through the full pipeline state machine."""
+
+    def __init__(
+        self,
+        agent_ctx: AgentContext,
+        model_router: ModelRouter,
+        max_revisions: int = 3,
+        checkpoint_db_path: str | None = None,
+    ) -> None:
+        self._ctx = agent_ctx
+        self._router = model_router
+        self._max_revisions = max_revisions
+        self._checkpoint_db = checkpoint_db_path
+
+        from pipeline.agents.editor_agent import EditorAgent
+
+        self._writer = WriterAgent(ctx=agent_ctx, model_router=model_router)
+        self._editor = EditorAgent(ctx=agent_ctx, model_router=model_router)
+        self._quality = QualityAgent(ctx=agent_ctx)
+        self._controller = ConvergenceController(max_revisions=max_revisions)
+
+    def run_scene(self, job_context: JobContext) -> SceneRunResult:
+        """Execute a complete scene lifecycle and return SceneRunResult."""
+        agents: dict[str, Any] = {
+            "writer_agent": self._writer,
+            "editor_agent": self._editor,
+            "quality_agent": self._quality,
+        }
+
+        def _make_job_context(state: SceneState) -> JobContext:
+            merged_output: dict[str, Any] = {}
+            if state.get("writer_output"):
+                merged_output["writer_agent"] = state["writer_output"]
+            if state.get("editor_output"):
+                merged_output["editor_agent"] = state["editor_output"]
+            if state.get("quality_output"):
+                merged_output["quality_agent"] = state["quality_output"]
+            return JobContext(
+                job_id=state["job_id"],
+                series_id=state["series_id"],
+                book_id=state["book_id"],
+                chapter_id=state["chapter_id"],
+                scene_id=state["scene_id"],
+                spec=job_context.spec,
+                model_tier=state["model_tier"],
+                seed=state["seed"],
+                scene_brief=state["scene_brief"],
+                word_count_target=state["word_count_target"],
+                heat_level=state["heat_level"],
+                final_text=state.get("final_text", ""),
+                bible_contradiction=state.get("bible_contradiction", False),
+                overdue_promises=state.get("overdue_promises", []),
+                output_data=merged_output,
+            )
+
+        machine = SceneStateMachine(
+            agents=agents,
+            job_context_factory=_make_job_context,
+            controller=self._controller,
+            checkpoint_db_path=self._checkpoint_db,
+        )
+
+        initial: SceneState = {
+            "job_id": job_context.job_id,
+            "scene_id": job_context.scene_id,
+            "book_id": job_context.book_id,
+            "series_id": job_context.series_id,
+            "chapter_id": job_context.chapter_id,
+            "model_tier": job_context.model_tier,
+            "seed": job_context.seed,
+            "scene_brief": job_context.scene_brief,
+            "word_count_target": job_context.word_count_target,
+            "heat_level": job_context.heat_level,
+            "writer_output": {},
+            "editor_output": {},
+            "quality_output": {},
+            "convergence_decision": "",
+            "revise_count": 0,
+            "final_text": "",
+            "force_resolved": False,
+            "force_resolve_reason": "",
+            "bible_contradiction": job_context.bible_contradiction,
+            "overdue_promises": job_context.overdue_promises,
+            "error": "",
+        }
+
+        logger.info(
+            "JobRunner: starting scene %s (job=%s)", job_context.scene_id, job_context.job_id
+        )
+        final_state = machine.run(initial)
+        logger.info(
+            "JobRunner: finished scene %s decision=%s",
+            job_context.scene_id,
+            final_state.get("convergence_decision", "?"),
+        )
+
+        return SceneRunResult(
+            scene_id=job_context.scene_id,
+            job_id=job_context.job_id,
+            final_text=final_state.get("final_text", ""),
+            force_resolved=final_state.get("force_resolved", False),
+            convergence_decision=final_state.get("convergence_decision", ""),
+            revise_count=final_state.get("revise_count", 0),
+            error=final_state.get("error", ""),
+            final_state=final_state,
+        )
+
+    def resume(self, thread_id: str, job_context: JobContext) -> SceneRunResult | None:
+        """Resume a checkpointed scene run."""
+        if not self._checkpoint_db:
+            return None
+
+        agents: dict[str, Any] = {
+            "writer_agent": self._writer,
+            "editor_agent": self._editor,
+            "quality_agent": self._quality,
+        }
+
+        def _make_job_context(state: SceneState) -> JobContext:
+            return job_context
+
+        machine = SceneStateMachine(
+            agents=agents,
+            job_context_factory=_make_job_context,
+            controller=self._controller,
+            checkpoint_db_path=self._checkpoint_db,
+        )
+        final_state = machine.resume(thread_id)
+        if final_state is None:
+            return None
+
+        return SceneRunResult(
+            scene_id=job_context.scene_id,
+            job_id=job_context.job_id,
+            final_text=final_state.get("final_text", ""),
+            force_resolved=final_state.get("force_resolved", False),
+            convergence_decision=final_state.get("convergence_decision", ""),
+            revise_count=final_state.get("revise_count", 0),
+            error=final_state.get("error", ""),
+            final_state=final_state,
+        )

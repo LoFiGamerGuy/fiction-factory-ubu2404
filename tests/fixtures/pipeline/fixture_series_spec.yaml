@@ -1,0 +1,13 @@
+series_id: fixture-series
+series_title: "The Test Series"
+author_profile: default
+genre_module: romance_module_v1
+sensitivity_profile: default
+goal_profile: kdp_commercial
+audience_profile: romance_reader
+books:
+  - book_id: fixture-book-001
+    title: "Test Book One"
+    word_count_target: 80000
+    chapter_count: 30
+model_tier: test

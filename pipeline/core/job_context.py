@@ -34,6 +34,14 @@ class JobContext:
     run_timestamp: str = ""
     input_hash: str = ""
     output_data: dict[str, Any] = field(default_factory=dict)
+    # Scene-level fields (populated by JobRunner / pipeline)
+    scene_brief: str = ""
+    word_count_target: int = 1200
+    heat_level: int = 1
+    final_text: str = ""
+    # Routing signals (set by ContinuityAgent / LoopTracker in Phase 9)
+    bible_contradiction: bool = False
+    overdue_promises: list[str] = field(default_factory=list)
 
     def with_output(self, agent_id: str, data: dict[str, Any]) -> JobContext:
         """Return a copy with agent output appended (non-mutating)."""
