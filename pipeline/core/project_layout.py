@@ -51,6 +51,9 @@ class ProjectLayout:
 
     # ── Scene-level paths ─────────────────────────────────────────────────────
 
+    def scene_inventory_path(self) -> Path:
+        return self.book_dir() / "scene_inventory.json"
+
     def scene_output_path(self, chapter: int, scene: int) -> Path:
         return self.book_dir() / "scenes" / f"ch{chapter:02d}_sc{scene:02d}.md"
 
