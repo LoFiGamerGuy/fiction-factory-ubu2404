@@ -92,14 +92,18 @@ class BookStructurePlanner:
         if raw_waypoints and isinstance(raw_waypoints, list):
             heat_waypoints = [(float(p), int(h)) for p, h in raw_waypoints]
 
-        # Scene function vocabulary
+        # Scene function vocabulary — check genre_config first, then series_spec top level
+        _default_funcs = ["meet_cute", "escalation", "black_moment", "climax", "resolution"]
         scene_functions = list(
-            series_spec.get(
-                "scene_function_vocabulary",
-                ["meet_cute", "escalation", "black_moment", "climax", "resolution"],
-            )
+            genre_config.get("scene_function_vocabulary")
+            or series_spec.get("scene_function_vocabulary")
+            or _default_funcs
         )
-        required_slots: list[str] = list(series_spec.get("required_scene_slots", []))
+        required_slots: list[str] = list(
+            genre_config.get("required_scene_slots")
+            or series_spec.get("required_scene_slots")
+            or []
+        )
 
         # Act proportions: act1≈25%, act2≈50%, act3≈25%
         act1_end = int(total_scenes * 0.25)

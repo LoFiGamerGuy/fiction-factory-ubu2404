@@ -83,7 +83,7 @@ class TestProjectLayout:
 
     def test_scene_output_path_includes_chapter_and_scene(self, tmp_path: Path) -> None:
         layout = _make_layout(tmp_path)
-        p = layout.scene_output_path(3, 7)
+        p = layout.scene_output_path(3, "ch03_sc07")
         assert "ch03" in p.name
         assert "sc07" in p.name
 
