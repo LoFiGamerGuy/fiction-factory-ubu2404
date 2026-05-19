@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://book-pipeline.local/schemas/evoskill/trace/v1",
+  "title": "EvoSkillTrace",
+  "description": "A scene execution trace collected for EvoSkill learning. Captures agent I/O, routing decisions, and quality scores for failure/success classification.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["trace_id", "series_id", "book_id", "scene_id", "trace_type", "timestamp"],
+  "properties": {
+    "trace_id": {
+      "type": "string",
+      "description": "Unique identifier for this trace record."
+    },
+    "series_id": {
+      "type": "string",
+      "description": "Series namespace this trace belongs to."
+    },
+    "book_id": {
+      "type": "string",
+      "description": "Book within the series that generated this trace."
+    },
+    "scene_id": {
+      "type": "string",
+      "description": "Scene that generated this trace."
+    },
+    "trace_type": {
+      "type": "string",
+      "enum": ["failure", "success"],
+      "description": "Whether the scene run succeeded or was classified as a failure."
+    },
+    "failure_mode": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "voice_drift",
+            "pacing_violation",
+            "continuity_error",
+            "heat_curve_miss",
+            "quality_gate_fail"
+          ]
+        },
+        { "type": "null" }
+      ],
+      "description": "Specific failure mode for failed traces; null for successful traces."
+    },
+    "agent_inputs": {
+      "type": "object",
+      "description": "Map of agent_id to hashed input digest.",
+      "additionalProperties": { "type": "string" }
+    },
+    "agent_outputs": {
+      "type": "object",
+      "description": "Map of agent_id to hashed output digest.",
+      "additionalProperties": { "type": "string" }
+    },
+    "routing_decisions": {
+      "type": "array",
+      "description": "Ordered list of routing decisions made during scene generation (e.g. REVISE, RE_PLAN, GO).",
+      "items": { "type": "string" }
+    },
+    "quality_scores": {
+      "type": "object",
+      "description": "Map of quality metric name to numeric score.",
+      "additionalProperties": { "type": "number" }
+    },
+    "critic_scores": {
+      "type": "object",
+      "description": "Map of critic agent name to numeric score.",
+      "additionalProperties": { "type": "number" }
+    },
+    "word_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Word count of the final_text at time of trace collection."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp when the trace was collected."
+    }
+  }
+}
