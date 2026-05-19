@@ -228,3 +228,75 @@ Items explicitly deferred to V2. Do not implement in V1.
 | **EvoSkill → Claude Dreaming handoff** | Bunko §5 | Monitor Claude Dreaming GA; evaluate vs EvoSkill when available. |
 | **Fine-tuning / cloud GPU** (AWS GPU, Sentient-Enclaves) | Bunko | Deferred; local dev only for V1. |
 | **Paid scraping services** (Apify, Bright Data, Composio) | Various | Deferred; no reception tier in V1. |
+
+---
+
+## Section 4: Task 011–015 Decisions
+
+### T011-001 — Approval Gate Timeout
+**Date:** 2026-05-18
+**Statement:** Paperclip approval gate timeout set to 3600 seconds (1 hour default). Pipeline halts with error if timeout expires without human approval.
+**Rationale:** Consistent with DEC-004 (no human gates in inner loop). Gates wrap only `--init-book` and `--book-publish`.
+
+---
+
+### T011-002 — Budget Enforcement: Halt vs Pause
+**Date:** 2026-05-18
+**Statement:** Budget exhaustion causes pipeline halt (exit), not pause. `check_budget()` returns False → orchestrator exits with error message.
+**Rationale:** Pause requires durable state management. Halt is cleaner for V1. User restarts after refilling budget.
+
+---
+
+### T011-003 — WUPHF Activity Stream as Audit Log
+**Date:** 2026-05-18
+**Statement:** WUPHF activity stream is the primary audit log for all agent actions. No separate audit log file. If WUPHF is unavailable, pipeline continues (graceful degradation); audit gap is logged.
+
+---
+
+### T012-001 — Fixture Benchmark Corpus
+**Date:** 2026-05-18
+**Statement:** EvoSkill Evaluator uses fixture traces from the smoke test corpus as benchmark. In V1 (local mock mode), Evaluator is mocked; production benchmark corpus to be defined after first 50 production scenes.
+
+---
+
+### T012-002 — Nightly Pass Scheduling
+**Date:** 2026-05-18
+**Statement:** EvoSkill nightly pass runs manually via `python scripts/evoskill_nightly.py` in V1. Cron automation deferred to V2 operational setup.
+
+---
+
+### T013-001 — SSE vs WebSockets
+**Date:** 2026-05-18
+**Statement:** SSE (Server-Sent Events) chosen for Author Dashboard live updates over WebSockets. SSE is simpler for unidirectional server→client stream; no bidirectional communication needed. V2 upgrade to WebSockets if interactive control is added.
+
+---
+
+### T013-002 — Local Async Queue for SSE
+**Date:** 2026-05-18
+**Statement:** SSE events use a local `asyncio.Queue` (no Redis dependency) for V1. Single-process, single-user local dev. V2 introduces Redis pub-sub if multi-process deployment is needed.
+
+---
+
+### T014-001 — VoiceConsistencyMetric Threshold
+**Date:** 2026-05-18
+**Statement:** `VoiceConsistencyMetric` thresholds: Romance default 0.75, Erotica default 0.70. Lower erotica threshold reflects expected kinetic prose variance. Thresholds configurable per-genre at construction time.
+
+---
+
+### T014-002 — AITellMetric LLM Judge Threshold
+**Date:** 2026-05-18
+**Statement:** LLM-as-judge invoked only for severity `"critical"` issues. High-severity patterns handled deterministically. Severity-5 critical patterns (e.g. "a testament to") are unambiguous; high-severity patterns may have legitimate use.
+
+---
+
+### T014-003 — Mem0 Retrieval Count
+**Date:** 2026-05-18
+**Statement:** Mem0 semantic retrieval returns top-5 facts per query by default. Balances context richness vs token cost. Tunable via `n=` parameter.
+
+---
+
+### T015-001 — V2 Scope Deferred
+**Date:** 2026-05-18
+**Statement:** All V2 scope items documented in `docs/v2-roadmap.md` are deferred until V1 completion criteria are met. No V2 implementation code, schemas, or dependencies added in V1.
+**V1 completion criteria:** (1) one complete book produced and reviewed; (2) `make eval` passes VoiceConsistencyMetric ≥ 0.75 and AITell below threshold; (3) author signs off on production run; (4) `BookStructuralVerifier` passes; (5) ≥ 3 EvoSkill nightly passes with promoted skills.
+**Supersedes:** Nothing — new deferral record.
