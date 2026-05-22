@@ -1,0 +1,37 @@
+# Romance Series Spec — Dreaming Evaluation Fixture
+# BCR-20260522-claude-dreaming-mem0 (T1.14)
+
+series_id: dreaming-eval-series
+series_title: "Test Romance Series for Dreaming Evaluation"
+genre: romance
+heat_level: sensual  # RWA scale: sweet/sensual/steamy/erotic
+
+# Voice profile (minimal for fixture)
+voice_profile:
+  sentence_length_avg_target: 15
+  interiority_pct_target: 0.25
+  sensory_density_target: 2.0  # per 1K words
+  dialogue_ratio_target: 0.35
+
+# Series-level continuity
+bible:
+  characters:
+    - name: "Emma Chen"
+      occupation: "Architect"
+      age: 32
+      core_wound: "Fear of commitment after broken engagement"
+    
+    - name: "Marcus Rivera"
+      occupation: "Restaurant owner"
+      age: 35
+      core_wound: "Workaholic tendencies, neglects relationships"
+  
+  locations:
+    - name: "San Francisco Bay Area"
+      description: "Urban setting with waterfront restaurants"
+
+# Ledger targets (3-scene fixture)
+ledger_targets:
+  interiority_pct_max: 0.30
+  sensory_density_min: 1.5
+  ai_tell_density_max: 2.0  # per 1K words

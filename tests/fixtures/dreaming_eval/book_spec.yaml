@@ -1,0 +1,54 @@
+# Book Spec — Dreaming Evaluation Fixture
+# BCR-20260522-claude-dreaming-mem0 (T1.14)
+
+book_id: dreaming-eval-book-01
+book_title: "Test Romance: Dreaming Evaluation"
+word_count_target: 3000  # 3 scenes × ~1000 words each
+
+# Romance Module v1.0 requirements
+romance_module:
+  ending_type: HEA  # Happily Ever After
+  heat_level: sensual
+  tonal_mode: tender
+  
+  # Heat curve (3 scenes only — gentle progression)
+  heat_curve:
+    - chapter: 1
+      scene: 1
+      heat_level_value: 1  # Meet-cute: low heat
+    - chapter: 1
+      scene: 2
+      heat_level_value: 3  # First-date: medium heat
+    - chapter: 1
+      scene: 3
+      heat_level_value: 2  # First-conflict: tension drops
+  
+  # Required tropes (minimal for 3-scene fixture)
+  tropes:
+    - forced_proximity: false
+    - enemies_to_lovers: false
+    - second_chance: false
+    - meet_cute: true
+
+# Scene inventory (3 scenes, single chapter)
+scenes:
+  - scene_id: "scene_01"
+    chapter: 1
+    scene_number: 1
+    function: meet_cute
+    word_target: 1000
+    pov_character: "Emma Chen"
+  
+  - scene_id: "scene_02"
+    chapter: 1
+    scene_number: 2
+    function: first_date
+    word_target: 1000
+    pov_character: "Marcus Rivera"
+  
+  - scene_id: "scene_03"
+    chapter: 1
+    scene_number: 3
+    function: first_conflict
+    word_target: 1000
+    pov_character: "Emma Chen"

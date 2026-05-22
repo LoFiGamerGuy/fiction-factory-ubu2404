@@ -3,6 +3,8 @@
 Per the MBSE Agent Views pattern: every agent call has a materialised JSON
 record at a canonical path, with a companion provenance.json that contains
 the SHA-256 hash of the context content.
+
+BCR-20260522: Added get_bible_context_semantic() stub for Mem0 integration.
 """
 
 from __future__ import annotations
@@ -51,8 +53,13 @@ class ContextPackBuilder:
     A companion ``provenance.json`` is written alongside each pack.
     """
 
-    def __init__(self, project_layout: ProjectLayout) -> None:
+    def __init__(
+        self,
+        project_layout: ProjectLayout,
+        bible_semantic_store: Any | None = None,  # BibleSemanticStore from T1.13
+    ) -> None:
         self._layout = project_layout
+        self._bible_semantic_store = bible_semantic_store
 
     def build(
         self,
@@ -122,6 +129,41 @@ class ContextPackBuilder:
             json.dump(provenance_record, fh, indent=2)
 
         logger.debug("ContextPack written: %s", pack.output_path)
+
+    def get_bible_context_semantic(
+        self,
+        query: str,
+        top_k: int = 5,
+    ) -> str:
+        """Semantic retrieval of bible facts via Mem0 (T1.13 stub).
+
+        Args:
+            query: Natural language query (e.g., "Sarah's occupation")
+            top_k: Number of top results to return (default: 5 per T014-003)
+
+        Returns:
+            Formatted string for context injection, or fallback message if
+            BibleSemanticStore not configured
+        """
+        if self._bible_semantic_store is None:
+            logger.warning(
+                "get_bible_context_semantic called but bible_semantic_store not configured"
+            )
+            return "(Bible semantic retrieval not available — full-bible injection fallback)"
+
+        try:
+            from pipeline.core.bible_semantic_store import BibleSemanticStore
+
+            if not isinstance(self._bible_semantic_store, BibleSemanticStore):
+                logger.error("bible_semantic_store is not a BibleSemanticStore instance")
+                return "(Bible semantic retrieval misconfigured)"
+
+            facts = self._bible_semantic_store.query(query, top_k=top_k)
+            return self._bible_semantic_store.format_facts_for_context(facts)
+
+        except Exception as exc:  # noqa: BLE001
+            logger.error("get_bible_context_semantic failed: %s", exc)
+            return f"(Bible semantic retrieval error: {exc})"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

@@ -3,6 +3,8 @@
 Every agent constructor takes a single AgentContext. This is the fail-fast
 pattern (DEC-008): AgentContext raises ValueError at construction if any
 required field is missing, so agents never silently run with incomplete deps.
+
+BCR-20260522: Added managed_agent_config for Claude Managed Agents support.
 """
 
 from __future__ import annotations
@@ -11,6 +13,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from pipeline.core.managed_agent_config import ManagedAgentConfig
 from pipeline.ledgers.ledger_manager import LedgerManager
 from pipeline.profiles.spec_loader import SpecLoader
 
@@ -22,6 +25,9 @@ class AgentContext:
     ``voice_exemplar_manager`` is reserved for Phase 8 (VoiceExemplarManager).
     Set to None in all Phase 6 constructions; Phase 8 populates it without
     changing this constructor signature.
+
+    ``managed_agent_config`` added in BCR-20260522 for Claude Managed Agents
+    (persistent memory, Files API, Message Batches API, Dreaming).
     """
 
     project_layout: Any  # ProjectLayout — Any to avoid circular import at module level
@@ -31,6 +37,7 @@ class AgentContext:
     output_dir: Path
     model_tier: str = "test"
     voice_exemplar_manager: Any = field(default=None)  # Phase 8: VoiceExemplarManager
+    managed_agent_config: ManagedAgentConfig = field(default_factory=ManagedAgentConfig)
 
     def __post_init__(self) -> None:
         missing: list[str] = []

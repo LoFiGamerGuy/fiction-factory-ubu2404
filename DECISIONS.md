@@ -107,6 +107,15 @@ Decisions made during Phase 2 review and Phase 3 planning. Binding for implement
 
 ---
 
+### DEC-001-001 — Claude Dreaming + Mem0 Phase 1 Adoption
+**Date:** 2026-05-22
+**Statement:** Claude Managed Agents (Dreaming) infrastructure and Mem0 semantic retrieval are adopted in Phase 1 (T1.12-T1.15). Decision gate after Phase 7 smoke test determines: (1) Dreaming only, (2) EvoSkill only, or (3) Both.
+**Rationale:** Claude Dreaming is now GA (no longer research preview), with zero infrastructure burden vs EvoSkill's Proposer/Evaluator/Frontier. Mem0 solves Bible context bloat predictably (semantic retrieval saves 90%+ tokens by book 3). Decision gate prevents premature commitment — evaluate both approaches with real data.
+**Supersedes:** Phase 14 T14.5 (Mem0 integration moved to Phase 1 T1.13).
+**BCR:** BCR-20260522-claude-dreaming-mem0 (APPROVED 2026-05-22)
+
+---
+
 ### SYN-013 — Per-Character Dialogue Metrics + BookNLP
 **Date:** 2026-05-15
 **Statement:** BookMetricsLedger.character_metrics tracks 12 per-character deterministic metrics per scene (keyed by character_id): MTLD, avg_word_length_chars, question_rate, exclamatory_rate, imperative_rate, first_person_pronoun_rate, second_person_pronoun_rate, modal_verb_rate, sentiment_mean, sentiment_std, fk_grade, function_word_vector. BookNLP added to V1 adopt list as the speaker attribution prerequisite. Supporting libraries added: spaCy, NLTK, lexicalrichness, textstat, vaderSentiment, faststylometry.
