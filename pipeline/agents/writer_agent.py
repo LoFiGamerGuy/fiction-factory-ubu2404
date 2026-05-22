@@ -2,10 +2,13 @@
 
 Calls the LLM via ModelRouter+Instructor and returns a typed WriterOutput.
 All path access goes through ProjectLayout (MBSE B1 fix).
+
+BCR-20260522: Wired for Claude Managed Agents Dreaming support.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -16,6 +19,8 @@ from pipeline.core.context_pack_builder import ContextPackBuilder
 from pipeline.core.job_context import JobContext
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from pipeline.core.agent_context import AgentContext
     from pipeline.core.model_router import ModelRouter
 
@@ -36,6 +41,16 @@ class WriterAgent(BaseAgent):
             ledger_manager=ctx.ledger_manager,
         )
         self._pack_builder = ContextPackBuilder(project_layout=ctx.project_layout)
+
+        # BCR-20260522: Persistent memory for Dreaming
+        self._memory_path: Path | None = None
+        if ctx.managed_agent_config and ctx.managed_agent_config.managed_agent_mode:
+            self._memory_path = ctx.managed_agent_config.get_memory_file("WriterAgent")
+            logger.info(
+                "WriterAgent: managed_agent_mode enabled (dreaming=%s, memory=%s)",
+                ctx.managed_agent_config.dreaming_enabled,
+                self._memory_path,
+            )
 
     def _execute(self, job_context: JobContext) -> JobContext:
         scene_brief = job_context.scene_brief or f"Scene {job_context.scene_id}"
@@ -88,6 +103,9 @@ class WriterAgent(BaseAgent):
             context_pack.provenance_hash[:8],
         )
 
+        # BCR-20260522: Update persistent memory for Dreaming
+        self._update_memory_from_output(output, job_context.scene_id)
+
         return job_context.with_output("writer_agent", output.model_dump())
 
     @staticmethod
@@ -117,3 +135,57 @@ class WriterAgent(BaseAgent):
             {"role": "system", "content": system},
             {"role": "user", "content": "\n\n".join(user_parts)},
         ]
+
+    # ── Persistent memory (BCR-20260522) ──────────────────────────────────────
+
+    def _load_memory(self) -> dict[str, Any]:
+        """Load persistent memory from disk (Claude Managed Agents)."""
+        if self._memory_path is None or not self._memory_path.exists():
+            return {}
+        try:
+            data: dict[str, Any] = json.loads(self._memory_path.read_text())
+            return data
+        except Exception as exc:
+            logger.warning("WriterAgent: failed to load memory: %s", exc)
+            return {}
+
+    def _save_memory(self, memory: dict[str, Any]) -> None:
+        """Save persistent memory to disk (Claude Managed Agents)."""
+        if self._memory_path is None:
+            return
+        try:
+            self._memory_path.parent.mkdir(parents=True, exist_ok=True)
+            self._memory_path.write_text(json.dumps(memory, indent=2))
+            logger.debug("WriterAgent: saved memory to %s", self._memory_path)
+        except Exception as exc:
+            logger.warning("WriterAgent: failed to save memory: %s", exc)
+
+    def _update_memory_from_output(self, output: WriterOutput, scene_id: str) -> None:
+        """Update persistent memory with successful generation (for Dreaming)."""
+        if (
+            not self.ctx.managed_agent_config
+            or not self.ctx.managed_agent_config.managed_agent_mode
+        ):
+            return
+
+        memory = self._load_memory()
+
+        # Track successful scenes
+        if "successful_scenes" not in memory:
+            memory["successful_scenes"] = []
+        memory["successful_scenes"].append(
+            {
+                "scene_id": scene_id,
+                "word_count": output.word_count,
+                "timestamp": output.model_dump().get("generated_at", ""),
+            }
+        )
+
+        # Keep only last 10 scenes
+        memory["successful_scenes"] = memory["successful_scenes"][-10:]
+
+        # Track total words generated
+        memory["total_words_generated"] = memory.get("total_words_generated", 0) + output.word_count
+        memory["scenes_completed"] = memory.get("scenes_completed", 0) + 1
+
+        self._save_memory(memory)
