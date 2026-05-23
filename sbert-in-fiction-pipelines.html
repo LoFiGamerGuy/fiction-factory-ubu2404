@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentence Transformers in Long-Form Fiction Pipelines</title>
+<meta name="description" content="A technical analysis of where embedding-based similarity helps in LLM novel-writing systems, where it doesn't, and what to layer alongside it for measurable anti-AI-voice gains.">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,300..900,0..100,0..1&family=Source+Serif+4:opsz,wght@8..60,200..900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --paper:        #f6f1e6;
+  --paper-warm:   #ede6d3;
+  --paper-deep:   #e3dac3;
+  --ink:          #1a1814;
+  --ink-soft:     #2d2823;
+  --ink-mute:     #5c554a;
+  --ink-faint:    #8a8170;
+  --rule:         #c9bfa5;
+  --rule-soft:    #ddd3b8;
+  --accent:       #6f2424;
+  --accent-soft:  #9c4949;
+  --accent-bg:    #f0e3d8;
+
+  --serif: "Source Serif 4", "Source Serif Pro", Georgia, "Times New Roman", serif;
+  --display: "Fraunces", "Source Serif 4", Georgia, serif;
+  --mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+
+  --measure: 38rem;
+  --measure-wide: 52rem;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  font-size: 17px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-weight: 380;
+  line-height: 1.62;
+  font-feature-settings: "kern" 1, "liga" 1, "onum" 1;
+  background-image:
+    radial-gradient(ellipse at top, rgba(255,250,235,0.6), transparent 60%),
+    radial-gradient(ellipse at bottom right, rgba(155,120,80,0.04), transparent 50%);
+  min-height: 100vh;
+}
+
+::selection { background: var(--accent); color: var(--paper); }
+
+/* ─── Layout ──────────────────────────────────────────────────────── */
+
+.page {
+  max-width: var(--measure-wide);
+  margin: 0 auto;
+  padding: 5rem 2rem 8rem;
+}
+
+article > * + * { margin-top: 1.1em; }
+article > h1, article > h2, article > h3 { margin-top: 2.6em; }
+article > section { margin-top: 4rem; }
+
+.center { max-width: var(--measure); margin-left: auto; margin-right: auto; }
+
+/* ─── Masthead ─────────────────────────────────────────────────────── */
+
+.masthead {
+  border-bottom: 1px solid var(--rule);
+  padding-bottom: 3rem;
+  margin-bottom: 4rem;
+}
+
+.eyebrow {
+  font-family: var(--display);
+  font-variation-settings: "opsz" 12, "wght" 500;
+  font-size: 0.72rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 2rem 0;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.eyebrow::before,
+.eyebrow::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--rule);
+}
+
+h1.title {
+  font-family: var(--display);
+  font-variation-settings: "opsz" 144, "wght" 380, "SOFT" 30;
+  font-size: clamp(2.4rem, 5.2vw, 4.1rem);
+  line-height: 1.04;
+  letter-spacing: -0.018em;
+  margin: 0 0 1.5rem 0;
+  color: var(--ink);
+  font-weight: normal;
+}
+
+h1.title em {
+  font-variation-settings: "opsz" 144, "wght" 380, "SOFT" 100, "WONK" 1;
+  font-style: italic;
+  color: var(--accent);
+}
+
+.subtitle {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 380;
+  font-size: 1.2rem;
+  line-height: 1.5;
+  color: var(--ink-mute);
+  margin: 0 0 2.5rem 0;
+  max-width: var(--measure);
+}
+
+.byline {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+  font-family: var(--display);
+  font-variation-settings: "opsz" 12, "wght" 450;
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.byline span strong {
+  font-weight: 600;
+  color: var(--ink-soft);
+  font-variation-settings: "opsz" 12, "wght" 600;
+}
+
+/* ─── Section headings ──────────────────────────────────────────── */
+
+h2 {
+  font-family: var(--display);
+  font-variation-settings: "opsz" 60, "wght" 450;
+  font-weight: normal;
+  font-size: 2rem;
+  line-height: 1.15;
+  letter-spacing: -0.012em;
+  color: var(--ink);
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 1.2rem;
+}
+
+h2 .num {
+  font-family: var(--display);
+  font-variation-settings: "opsz" 12, "wght" 500;
+  font-size: 0.78rem;
+  letter-spacing: 0.22em;
+  color: var(--accent);
+  flex-shrink: 0;
+  padding-top: 0.3em;
+  font-feature-settings: "tnum" 1;
+}
+
+h3 {
+  font-family: var(--display);
+  font-variation-settings: "opsz" 24, "wght" 520;
+  font-weight: normal;
+  font-size: 1.18rem;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
+  color: var(--ink);
+  margin: 2.4em 0 0.8em;
+}
+
+h3 .num {
+  color: var(--ink-faint);
+  font-feature-settings: "tnum" 1;
+  margin-right: 0.5em;
+  font-variation-settings: "opsz" 12, "wght" 420;
+  font-size: 0.92em;
+}
+
+/* ─── Body text ─────────────────────────────────────────────────── */
+
+p {
+  margin: 0;
+  max-width: var(--measure);
+  hyphens: auto;
+  -webkit-hyphens: auto;
+}
+
+p strong, li strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+p em, li em { font-style: italic; }
+
+a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+/* ─── Lead paragraph & drop cap ─────────────────────────────────── */
+
+.lead {
+  font-size: 1.18rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.lead::first-letter {
+  font-family: var(--display);
+  font-variation-settings: "opsz" 144, "wght" 380;
+  font-size: 4.2em;
+  line-height: 0.88;
+  float: left;
+  padding: 0.05em 0.08em 0 0;
+  color: var(--accent);
+  font-weight: normal;
+}
+
+/* ─── Executive summary block ───────────────────────────────────── */
+
+.summary {
+  background: var(--paper-warm);
+  border-left: 3px solid var(--accent);
+  padding: 2rem 2.2rem;
+  margin: 3rem 0 0 0;
+  max-width: var(--measure);
+}
+
+.summary > * + * { margin-top: 1em; }
+
+.summary p { font-size: 1rem; }
+
+.summary .label {
+  font-family: var(--display);
+  font-variation-settings: "opsz" 12, "wght" 600;
+  font-size: 0.7rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 0.6rem 0;
+}
+
+/* ─── Pull quote ─────────────────────────────────────────────────── */
+
+.pullquote {
+  font-family: var(--display);
+  font-variation-settings: "opsz" 60, "wght" 380, "SOFT" 50;
+  font-style: italic;
+  font-size: 1.55rem;
+  line-height: 1.32;
+  color: var(--ink);
+  margin: 3rem auto;
+  padding: 2rem 0 2rem 2rem;
+  border-left: 2px solid var(--accent);
+  max-width: var(--measure);
+  letter-spacing: -0.005em;
+}
+
+.pullquote strong {
+  font-style: normal;
+  font-variation-settings: "opsz" 60, "wght" 520;
+  font-weight: normal;
+  color: var(--accent);
+}
+
+/* ─── Example block ──────────────────────────────────────────────── */
+
+.example {
+  background: var(--paper-warm);
+  padding: 1.8rem 2rem;
+  margin: 1.6em 0;
+  border-top: 1px solid var(--rule-soft);
+  border-bottom: 1px solid var(--rule-soft);
+  max-width: var(--measure);
+}
+
+.example .label {
+  font-family: var(--display);
+  font-variation-settings: "opsz" 12, "wght" 550;
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 0.8rem 0;
+}
+
+.example blockquote {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.05rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.example blockquote + blockquote { margin-top: 1.4rem; padding-top: 1.4rem; border-top: 1px dashed var(--rule); }
+
+.example blockquote::before { content: "“"; color: var(--accent); margin-right: 0.1em; font-size: 1.2em; }
+.example blockquote::after  { content: "”"; color: var(--accent); margin-left: 0.05em; font-size: 1.2em; }
+
+/* ─── Lists ──────────────────────────────────────────────────────── */
+
+ul, ol {
+  max-width: var(--measure);
+  padding-left: 1.3rem;
+  margin: 1em 0 0 0;
+}
+
+li { margin-bottom: 0.55em; }
+li::marker { color: var(--accent); }
+
+ul.tight li { margin-bottom: 0.15em; }
+
+ul.tics {
+  columns: 2;
+  column-gap: 2rem;
+  list-style: none;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: 0.88rem;
+}
+ul.tics li {
+  margin: 0 0 0.4em 0;
+  color: var(--ink-soft);
+  break-inside: avoid;
+}
+ul.tics li::before {
+  content: "·";
+  color: var(--accent);
+  margin-right: 0.7em;
+}
+
+/* ─── Tier blocks ────────────────────────────────────────────────── */
+
+.tiers { margin-top: 2rem; }
+
+.tier {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 2rem;
+  padding: 1.8rem 0;
+  border-top: 1px solid var(--rule-soft);
+  max-width: var(--measure-wide);
+}
+.tier:last-of-type { border-bottom: 1px solid var(--rule-soft); }
+
+.tier .marker {
+  font-family: var(--display);
+  font-variation-settings: "opsz" 12, "wght" 550;
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding-top: 0.5em;
+}
+.tier .marker .n {
+  display: block;
+  font-family: var(--display);
+  font-variation-settings: "opsz" 144, "wght" 380;
+  font-size: 2.4rem;
+  letter-spacing: 0;
+  line-height: 1;
+  color: var(--ink);
+  margin-top: 0.2em;
+  font-feature-settings: "lnum" 1;
+}
+
+.tier h3 { margin-top: 0; }
+.tier ul { margin-top: 0.8em; }
+
+/* ─── Comparison table ──────────────────────────────────────────── */
+
+.table-wrap {
+  margin: 2rem 0 0 0;
+  overflow-x: auto;
+  max-width: var(--measure-wide);
+  border-top: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+thead th {
+  font-family: var(--display);
+  font-variation-settings: "opsz" 12, "wght" 600;
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 1.1rem 1rem;
+  color: var(--ink);
+  border-bottom: 1px solid var(--ink);
+  font-weight: normal;
+  vertical-align: bottom;
+}
+
+tbody td {
+  padding: 0.95rem 1rem;
+  border-bottom: 1px solid var(--rule-soft);
+  vertical-align: top;
+  line-height: 1.4;
+}
+
+tbody tr:last-child td { border-bottom: none; }
+
+tbody td.concern {
+  font-family: var(--serif);
+  font-weight: 500;
+  color: var(--ink);
+  font-style: italic;
+  width: 38%;
+}
+
+tbody td.right {
+  color: var(--accent);
+  font-variation-settings: "opsz" 12, "wght" 500;
+  font-family: var(--display);
+  font-size: 0.92rem;
+}
+
+tbody td.wrong {
+  color: var(--ink-faint);
+  font-family: var(--display);
+  font-variation-settings: "opsz" 12, "wght" 420;
+  font-size: 0.92rem;
+  font-style: italic;
+}
+
+/* ─── Inline marks ──────────────────────────────────────────────── */
+
+code, .mono {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  color: var(--ink-soft);
+  background: var(--paper-warm);
+  padding: 0.08em 0.36em;
+  border-radius: 2px;
+}
+
+.smallcaps {
+  font-variant-caps: all-small-caps;
+  letter-spacing: 0.08em;
+  font-weight: 500;
+}
+
+hr.rule {
+  border: none;
+  height: 1px;
+  background: var(--rule);
+  margin: 4rem auto;
+  max-width: var(--measure);
+}
+
+hr.ornament {
+  border: none;
+  text-align: center;
+  margin: 4rem auto;
+  max-width: var(--measure);
+}
+hr.ornament::after {
+  content: "✦ ✦ ✦";
+  color: var(--rule);
+  letter-spacing: 1.2em;
+  font-size: 0.85rem;
+}
+
+/* ─── Closing ────────────────────────────────────────────────────── */
+
+.closing {
+  margin-top: 4rem;
+  padding-top: 3rem;
+  border-top: 1px solid var(--rule);
+  max-width: var(--measure);
+}
+
+.closing h2 {
+  font-variation-settings: "opsz" 60, "wght" 380, "SOFT" 50;
+  font-style: italic;
+  color: var(--accent);
+}
+
+.closing .kicker {
+  font-family: var(--display);
+  font-variation-settings: "opsz" 144, "wght" 400, "SOFT" 50;
+  font-style: italic;
+  font-size: 1.35rem;
+  line-height: 1.4;
+  color: var(--ink);
+  margin-top: 1.5em;
+}
+
+footer.colophon {
+  margin-top: 6rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--rule);
+  font-family: var(--display);
+  font-variation-settings: "opsz" 12, "wght" 450;
+  font-size: 0.72rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  text-align: center;
+  max-width: var(--measure);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────── */
+
+@media (max-width: 720px) {
+  html { font-size: 16px; }
+  .page { padding: 3rem 1.25rem 5rem; }
+  h2 { flex-direction: column; gap: 0.4rem; align-items: flex-start; font-size: 1.7rem; }
+  h2 .num { padding-top: 0; }
+  .tier { grid-template-columns: 1fr; gap: 0.6rem; }
+  .tier .marker .n { font-size: 1.8rem; }
+  .pullquote { font-size: 1.25rem; padding-left: 1.2rem; }
+  ul.tics { columns: 1; }
+  .lead::first-letter { font-size: 3.6em; }
+}
+
+@media print {
+  body { background: white; }
+  .page { padding: 1rem; max-width: none; }
+  .pullquote, .summary, .example, .tier { break-inside: avoid; }
+  h2, h3 { break-after: avoid; }
+}
+</style>
+</head>
+
+<body>
+<div class="page">
+<article>
+
+<header class="masthead">
+  <p class="eyebrow">A Technical Analysis</p>
+  <h1 class="title">Sentence Transformers in <em>Long&#8209;Form Fiction</em> Pipelines</h1>
+  <p class="subtitle">Where embedding-based similarity earns its keep in LLM novel-writing systems, where it doesn't, and what to layer alongside it for measurable anti-AI-voice gains.</p>
+  <div class="byline">
+    <span><strong>Audience</strong> &nbsp;&middot;&nbsp; Pipeline architects, ML engineers, editorial-tool builders</span>
+    <span><strong>Status</strong> &nbsp;&middot;&nbsp; For evaluation &amp; inclusion</span>
+  </div>
+</header>
+
+<aside class="summary" aria-label="Executive summary">
+  <p class="label">Executive Summary</p>
+  <p>Sentence Transformers (SBERT) are useful in long-form fiction generation pipelines, but they are <strong>the wrong tool for the central problem</strong> most teams are trying to solve: making generated prose stop sounding like AI.</p>
+  <p>The reason is structural. SBERT models are explicitly trained to collapse over surface variation and concentrate signal in semantic meaning. AI tells live almost entirely in surface features &mdash; token distributions, syntactic patterns, lexical tics, punctuation density, rhythm. Embedding similarity is, by design, blind to exactly the signal that matters.</p>
+  <p>This document separates the genuinely useful SBERT applications from the layer that actually moves prose quality, and closes with a recommended tiering for integration. The underlying design principle assumed throughout: <em>LLMs generate, code measures, code decides.</em> Both layers described here are deterministic measurement and decision systems sitting around the generative agents, not inside them.</p>
+</aside>
+
+<section>
+<h2><span class="num">§ 01</span> <span>The Core Problem</span></h2>
+
+<p class="lead">When practitioners say a generated novel "sounds like AI," they are pointing at a specific cluster of artifacts &mdash; not a general aesthetic complaint. The cluster is identifiable, measurable, and to a large extent controllable. Knowing what is in it determines where the work of mitigation should sit in the pipeline.</p>
+
+<p>The cluster typically includes:</p>
+
+<ul>
+  <li>High em-dash density and stereotyped sentence patterns &mdash; <em>"It's not X, it's Y."</em></li>
+  <li>Lexical tics: <code>delve</code>, <code>tapestry</code>, <code>whispers</code>, <code>navigate the landscape</code>, <code>in the realm of</code>, <code>a testament to</code>.</li>
+  <li>Low sentence-length variance; uniform pacing within paragraphs.</li>
+  <li>Reflexive parenthetical asides and appositive over-explanation.</li>
+  <li>Participial-phrase-before-comma sentence openers, repeated across pages.</li>
+  <li>Semantic repetition &mdash; the same idea returning in different surface clothing, often unnoticed by the model.</li>
+  <li>Uncanny "explainer voice" intrusions in close-third narration.</li>
+  <li>Excessive coordination via <em>and</em>, <em>but</em>, <em>yet</em> where a real prose stylist would vary structure.</li>
+</ul>
+
+<p style="margin-top:1.4em;">All of these are <strong>surface-feature phenomena</strong>. They are detectable, measurable, and constrainable with classical NLP &mdash; but only if the measurement system is looking at the right level of abstraction.</p>
+
+<p>A pipeline that addresses these only through prompt engineering will plateau. A pipeline that wraps generation in a deterministic measurement-and-revision loop can keep improving.</p>
+</section>
+
+<section>
+<h2><span class="num">§ 02</span> <span>Why SBERT Is the Wrong Tool Here</span></h2>
+
+<p>SBERT models are trained on objectives &mdash; natural language inference, paraphrase identification, semantic textual similarity &mdash; that explicitly reward representations <em>invariant</em> to surface differences. A well-trained sentence embedding will place these two sentences close together in vector space:</p>
+
+<div class="example">
+  <p class="label">Demonstration &mdash; Same Meaning, Opposite Voice</p>
+  <blockquote>The old man walked slowly down the path.</blockquote>
+  <blockquote>With measured, deliberate steps, the elderly gentleman traversed the winding trail &mdash; a silent testament to the weight of years carried in his frame.</blockquote>
+</div>
+
+<p>The first reads like working novelist prose. The second is AI-slop. Their cosine distance is small. That is the model behaving correctly for its training objective, and exactly wrong for AI-tell detection.</p>
+
+<p>Any pipeline that uses sentence-embedding similarity as its primary voice-quality signal will systematically miss the artifacts it most needs to catch. Reframing the problem as "build a better embedding model" usually fails too &mdash; the surface features carry low semantic information by definition, so they get squeezed out of any embedding optimized for meaning.</p>
+
+<blockquote class="pullquote">
+  <strong>The artifacts that make LLM prose recognizable as LLM prose are surface-feature artifacts</strong> &mdash; and embedding models are explicitly trained to be invariant to surface features.
+</blockquote>
+
+<p>This is not an argument against SBERT. It is an argument for placing it in the parts of the pipeline where its strengths apply.</p>
+</section>
+
+<section>
+<h2><span class="num">§ 03</span> <span>Where SBERT Adds Real Value</span></h2>
+
+<p>Four high-leverage applications, in rough order of payoff.</p>
+
+<h3><span class="num">3.1</span>Semantic Repetition Detection</h3>
+
+<p>Long-form LLM generation has a characteristic failure mode: the same idea or image returns multiple times across a manuscript in different surface clothing. A character "feels the weight of expectation" in chapter 3, then "carries the burden of what's expected of him" in chapter 11, then "shoulders the load of what others demand" in chapter 19. Surface-level deduplication cannot see this. Stylometry cannot see this. The author or editorial reader notices it on a re-read and finds it embarrassing.</p>
+
+<p>SBERT is the right tool. Embed every sentence in the manuscript, cluster on cosine distance, surface any cluster of size <code>&gt; k</code> with sentences drawn from different chapters or scenes. A reviewer agent or human editor then judges whether the repetition is deliberate (a motif) or an unconscious tic. This single application alone tends to justify the SBERT integration.</p>
+
+<h3><span class="num">3.2</span>Cross-Encoder Reranking of Candidate Revisions</h3>
+
+<p>When a drafter agent produces N candidate versions of a passage, a cross-encoder can score them against a target the team controls. Two viable target formulations:</p>
+
+<ul>
+  <li><strong>Pairwise human-vs-AI discriminator.</strong> Train a cross-encoder on (human-novel-prose, AI-novel-prose) pairs assembled from public-domain literature versus model outputs. Use it as a reranker: prefer candidates the discriminator scores as more human-like.</li>
+  <li><strong>Style-target matching.</strong> Given a target voice (excerpts from a reference author or established corpus), score candidates against that target. Cross-encoders score better than bi-encoders here because they attend across both sequences simultaneously.</li>
+</ul>
+
+<p>Both formulations require training data, which is a real cost. They also do not replace the stylometric layer described later &mdash; they sit on top of it as a softer, learned signal.</p>
+
+<h3><span class="num">3.3</span>RAG into the Editorial Agent</h3>
+
+<p>An editorial agent benefits from being conditioned on the specific craft references most relevant to the passage under review. A pipeline that retrieves <em>generic</em> style guidance into the editorial pass underperforms one that retrieves <em>passage-conditioned</em> guidance.</p>
+
+<p>Implementation sketch: index the style and voice profile corpus &mdash; curated author exemplars, craft notes, voice profile rubrics &mdash; with SBERT. At edit time, embed the current passage and retrieve the most semantically similar items from the index. Pass those retrievals into the editorial agent's context. The editorial pass is then critiquing this scene against directly comparable examples, not against a generic "good prose" prior.</p>
+
+<p>This is a standard RAG pattern and the highest-yield non-novel use of SBERT in fiction pipelines.</p>
+
+<h3><span class="num">3.4</span>Scene and Chapter Coherence Drift</h3>
+
+<p>Embed each scene or chapter as a pooled or summarized vector. Track cosine drift across the manuscript. Use as a continuity signal:</p>
+
+<ul>
+  <li>Does the climactic chapter sit in a semantic neighborhood consistent with the setup chapters?</li>
+  <li>Where are the discontinuities, and are they intentional?</li>
+  <li>Has a subplot or thematic thread drifted out of the cosine neighborhood it occupied in earlier chapters?</li>
+</ul>
+
+<p>This is a coarse signal, but it surfaces structural problems that are otherwise expensive to detect. Pair it with an explicit scene-and-chapter outline tracker for best results.</p>
+</section>
+
+<section>
+<h2><span class="num">§ 04</span> <span>What Actually Drives Anti-AI-Voice Gains</span></h2>
+
+<p>This is the layer that should sit closest to the drafter agent's output, before any embedding-based pass runs. All of it is classical NLP and classical stylometry. None of it requires neural models, though some components benefit from them.</p>
+
+<h3><span class="num">4.1</span>Function-Word Frequency &amp; Burrows' Delta</h3>
+
+<p>Function words &mdash; articles, prepositions, conjunctions, auxiliaries, pronouns &mdash; carry the strongest authorial fingerprint in stylometry. The classical <em>Burrows' Delta</em> measure compares a candidate passage to a target corpus on the frequency distribution of the top N function words and returns a distance.</p>
+
+<p>Use a target corpus drawn from the author voice the project is trying to evoke &mdash; public-domain reference authors, the team's own prior accepted work, a curated corpus blend. Score every chapter (and ideally every scene) on Delta against the target. Surface outliers for revision. This single technique is the most underused control in current LLM fiction pipelines.</p>
+
+<h3><span class="num">4.2</span>N-Gram Blacklists</h3>
+
+<p>Maintain a versioned blacklist of model-specific tics. Examples that recur across major models in 2025&ndash;26 production output:</p>
+
+<ul class="tics">
+  <li>delve / delves / delving</li>
+  <li>tapestry of</li>
+  <li>navigate the landscape</li>
+  <li>a testament to</li>
+  <li>in the realm of</li>
+  <li>whispers of</li>
+  <li>the weight of</li>
+  <li>speaks volumes</li>
+  <li>underscores the importance</li>
+  <li>navigating the complexities</li>
+  <li>rich tapestry</li>
+  <li>at its core</li>
+</ul>
+
+<p style="margin-top:1.4em;">The blacklist is not a hard ban &mdash; it is a budget. Allow each entry M occurrences per 10k words and surface violations for revision. Keep the list under version control; tics evolve as base models update.</p>
+
+<h3><span class="num">4.3</span>Surface-Feature Distributions</h3>
+
+<p>Compute and constrain:</p>
+
+<ul>
+  <li>Sentence length distribution &mdash; mean, variance, skew. AI prose tends toward low variance.</li>
+  <li>Em-dash, semicolon, parenthetical-aside density per page.</li>
+  <li>Type-token ratio across a sliding window &mdash; a proxy for lexical diversity.</li>
+  <li>Coordinator frequency (<em>and</em>, <em>but</em>, <em>yet</em>) per paragraph.</li>
+  <li>Adjective-stacking depth &mdash; how often does a noun arrive preceded by two or more adjectives.</li>
+  <li>Adverb density, especially <em>-ly</em> adverbs in dialogue tags.</li>
+</ul>
+
+<p>Target distributions can be calibrated from the reference corpus. Deviations are surfaced as revision candidates, not auto-edited.</p>
+
+<h3><span class="num">4.4</span>Syntactic-Pattern Detection</h3>
+
+<p>Some patterns are AI tells regardless of frequency. POS-tag template matching catches these directly:</p>
+
+<ul>
+  <li><em>"It's not X, it's Y"</em> and its variants.</li>
+  <li>Participial-phrase-before-comma sentence openers, repeated within a window.</li>
+  <li>Triadic intensifiers: <em>"It was X, it was Y, it was Z."</em></li>
+  <li><em>"as if to [verb]"</em> followed by abstraction.</li>
+  <li><em>"a kind of [abstract noun]"</em> followed by qualifier.</li>
+</ul>
+
+<p>Each pattern is implementable as a regex over POS-tagged text or as a small classifier. Keep them as discrete rules so they can be tuned per project.</p>
+
+<h3><span class="num">4.5</span>Perplexity Scoring Under a Base LLM</h3>
+
+<p>Counterintuitive but effective: AI-generated text typically has <em>lower</em> perplexity under the model class that generated it than human-written prose does. Score each sentence under a small open base model. Sentences sitting at perplexity floor are candidates for revision toward more "surprising" phrasings.</p>
+
+<p>This is the underlying signal behind several public AI-detection tools, with the same caveats about evasion and false positives &mdash; but used as a <em>revision signal</em> inside a pipeline (not a binary classifier on outside text) it works well.</p>
+
+<h3><span class="num">4.6</span>Rhythm &amp; Cadence</h3>
+
+<p>Optional but high-value. Syllable counts, stress patterns, and clause-boundary placement carry the music of prose. Tools like the CMU Pronouncing Dictionary plus light prosody analysis can score rhythmic monotony. A long passage where every sentence falls into the same iambic-leaning cadence reads as flat regardless of content quality.</p>
+</section>
+
+<section>
+<h2><span class="num">§ 05</span> <span>Recommended Layering</span></h2>
+
+<p>A pipeline that adopts both layers cleanly should structure them as follows.</p>
+
+<div class="tiers">
+
+<div class="tier">
+  <div class="marker">Tier <span class="n">01</span></div>
+  <div>
+    <h3>Stylometric Measurement Layer &mdash; <em style="color:var(--accent);font-style:normal;">required</em></h3>
+    <p>Runs against every drafter output before any other pass. Cheap, deterministic, fast.</p>
+    <ul class="tight">
+      <li>N-gram tic budget</li>
+      <li>Burrows' Delta against target voice corpus</li>
+      <li>Surface-feature distribution constraints</li>
+      <li>Syntactic-pattern detection</li>
+      <li>Perplexity scoring under a base reference model</li>
+    </ul>
+    <p style="margin-top:1em;">Violations are surfaced to a reviser agent (or back to the drafter) with the specific measurements that failed. The agent revises. The measurements run again. The loop terminates when all measurements pass thresholds.</p>
+  </div>
+</div>
+
+<div class="tier">
+  <div class="marker">Tier <span class="n">02</span></div>
+  <div>
+    <h3>Embedding Layer &mdash; <em style="color:var(--accent);font-style:normal;">high value, lower priority</em></h3>
+    <p>Runs at scene, chapter, or manuscript boundaries.</p>
+    <ul class="tight">
+      <li>Semantic repetition clustering across the manuscript</li>
+      <li>RAG retrieval into the editorial agent</li>
+      <li>Scene and chapter coherence drift monitoring</li>
+      <li>Cross-encoder reranking of candidate revisions, where training data is available</li>
+    </ul>
+  </div>
+</div>
+
+<div class="tier">
+  <div class="marker">Tier <span class="n">03</span></div>
+  <div>
+    <h3>Human or Senior-Agent Review &mdash; <em style="color:var(--accent);font-style:normal;">always</em></h3>
+    <p>Both layers above are filters. Neither replaces a final editorial pass. Their job is to make sure that pass is spent on craft and story, not on cleaning up mechanical AI tells.</p>
+  </div>
+</div>
+
+</div>
+</section>
+
+<section>
+<h2><span class="num">§ 06</span> <span>Implementation Notes</span></h2>
+
+<p>A few practical points that recur across teams building this.</p>
+
+<h3><span class="num">6.1</span>Calibration corpus matters more than algorithm choice</h3>
+<p>Burrows' Delta against a poorly chosen reference corpus produces worse results than a simpler measure against a well-chosen one. Spend time on the reference corpus &mdash; multiple authors blended for a target voice, public-domain where possible, ideally with the team's own prior accepted work folded in.</p>
+
+<h3><span class="num">6.2</span>Keep the measurement layer interpretable</h3>
+<p>When a chapter fails, the reviser agent (or human) needs to know <em>why</em>: which tic exceeded its budget, which surface metric drifted, which syntactic pattern repeated. A black-box quality score is much less useful than a structured report of specific violations.</p>
+
+<h3><span class="num">6.3</span>Version the rules</h3>
+<p>AI tells drift as base models update. The n-gram blacklist that mattered in early 2024 has partially shifted by mid-2026. Treat the rule set as a living artifact under version control.</p>
+
+<h3><span class="num">6.4</span>Do not over-constrain</h3>
+<p>Every metric has a target <em>range</em>, not a target value. A manuscript whose sentence-length variance exactly matches Hemingway's is not Hemingway &mdash; it is a strange artifact. Aim for distributions that fall within the band of accepted human prose for the target voice, not at any specific point.</p>
+
+<h3><span class="num">6.5</span>Embeddings are cheap but not free</h3>
+<p>A 50k-word manuscript has roughly 3&ndash;4k sentences. Embedding all of them with a modern SBERT model takes seconds on CPU and milliseconds on GPU. Repetition clustering across this scale is trivial. Do not over-engineer the infrastructure.</p>
+
+<h3><span class="num">6.6</span>Cross-encoders need training data the team has to assemble</h3>
+<p>If a project cannot commit to building a labeled pair corpus, skip the cross-encoder reranking application and rely on the stylometric layer plus retrieval. The other three SBERT applications work out of the box.</p>
+</section>
+
+<section>
+<h2><span class="num">§ 07</span> <span>Right Tool, Wrong Tool</span></h2>
+
+<p>A scannable mapping of concerns to layer assignments.</p>
+
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr>
+      <th scope="col">Concern</th>
+      <th scope="col">Right Tool</th>
+      <th scope="col">Wrong Tool</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="concern">Lexical tics &mdash; <span class="mono">delve</span>, <span class="mono">tapestry</span></td>
+      <td class="right">N-gram blacklist with budget</td>
+      <td class="wrong">SBERT similarity</td>
+    </tr>
+    <tr>
+      <td class="concern">Sentence rhythm monotony</td>
+      <td class="right">Length and cadence distributions</td>
+      <td class="wrong">SBERT similarity</td>
+    </tr>
+    <tr>
+      <td class="concern">AI-stereotyped syntactic patterns</td>
+      <td class="right">POS-template detection</td>
+      <td class="wrong">SBERT similarity</td>
+    </tr>
+    <tr>
+      <td class="concern">Author voice match</td>
+      <td class="right">Burrows' Delta on function words</td>
+      <td class="wrong">SBERT similarity</td>
+    </tr>
+    <tr>
+      <td class="concern">Lower-than-human perplexity</td>
+      <td class="right">Base-LLM perplexity scoring</td>
+      <td class="wrong">SBERT similarity</td>
+    </tr>
+    <tr>
+      <td class="concern">Semantic repetition across chapters</td>
+      <td class="right">SBERT clustering</td>
+      <td class="wrong">Stylometry</td>
+    </tr>
+    <tr>
+      <td class="concern">Passage-conditioned editorial retrieval</td>
+      <td class="right">SBERT RAG</td>
+      <td class="wrong">Stylometry</td>
+    </tr>
+    <tr>
+      <td class="concern">Scene coherence drift</td>
+      <td class="right">SBERT pooled-vector tracking</td>
+      <td class="wrong">Stylometry</td>
+    </tr>
+    <tr>
+      <td class="concern">Candidate revision ranking</td>
+      <td class="right">Cross-encoder, with training data</td>
+      <td class="wrong">Either layer alone</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+</section>
+
+<div class="closing">
+<h2>Closing Note</h2>
+<p>The strongest claim in this document is the simplest: the artifacts that make LLM prose recognizable as LLM prose are <em>surface-feature</em> artifacts, and embedding models are explicitly trained to be invariant to surface features. Any pipeline architecture that ignores this places its anti-AI-voice gating in the wrong layer.</p>
+<p class="kicker">SBERT belongs in a fiction pipeline. It just does not belong where most teams initially try to put it. Place the stylometric layer closest to the drafter, the embedding layer in the supporting roles where its strengths apply, and reserve human or senior-agent review for the work that neither layer can do.</p>
+</div>
+
+<footer class="colophon">
+  Set in Fraunces &amp; Source Serif &nbsp;&middot;&nbsp; Single-file HTML &nbsp;&middot;&nbsp; For evaluation &amp; inclusion
+</footer>
+
+</article>
+</div>
+</body>
+</html>

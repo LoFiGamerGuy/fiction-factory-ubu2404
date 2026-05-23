@@ -32,7 +32,11 @@ class _SurgicalEditOutput(BaseModel):
 
 
 class EditorAgent(BaseAgent):
-    """Runs scanner, structural analysis, and surgical LLM edits."""
+    """Runs scanner, structural analysis, and surgical LLM edits.
+
+    Supports Claude Managed Agents (Dreaming) for persistent memory
+    across editing sessions (if enabled in AgentContext).
+    """
 
     impl_class: ClassVar[str] = "hybrid"
     version: ClassVar[str] = "1.0"
@@ -42,6 +46,7 @@ class EditorAgent(BaseAgent):
         self._router = model_router
         self._scanner = NoFlyScanner()
         self._structural = StructuralAnalyzer()
+        self._load_persistent_memory()
 
     def _execute(self, job_context: JobContext) -> JobContext:
         writer_data = job_context.output_data.get("writer_agent", {})
@@ -110,6 +115,10 @@ class EditorAgent(BaseAgent):
             output.structural_flags,
             output.is_clean,
         )
+
+        # Save persistent memory if Dreaming enabled
+        self._save_persistent_memory(output)
+
         return job_context.with_output("editor_agent", output.model_dump())
 
     def _check_forbidden(self, text: str, job_context: JobContext) -> list[str]:
@@ -163,3 +172,72 @@ class EditorAgent(BaseAgent):
         except Exception as exc:
             logger.warning("EditorAgent surgical edit failed (non-fatal): %s", exc)
             return text
+
+    # ── Persistent Memory (Claude Managed Agents / Dreaming) ──────────────
+
+    def _load_persistent_memory(self) -> None:
+        """Load persistent memory if Dreaming enabled."""
+        if not self.ctx.managed_agent_config or not self.ctx.managed_agent_config.dreaming_enabled:
+            return
+
+        memory_path = self.ctx.managed_agent_config.get_memory_file("EditorAgent")
+        if not memory_path.exists():
+            logger.debug("EditorAgent: no persistent memory found (first run)")
+            return
+
+        try:
+            import json
+
+            memory_data = json.loads(memory_path.read_text(encoding="utf-8"))
+            logger.info(
+                "EditorAgent: loaded memory (scenes_edited=%d, total_surgical_passes=%d)",
+                memory_data.get("scenes_edited", 0),
+                memory_data.get("total_surgical_passes", 0),
+            )
+        except Exception as exc:
+            logger.warning("EditorAgent: failed to load memory: %s", exc)
+
+    def _save_persistent_memory(self, edit_output: EditorOutput) -> None:
+        """Save persistent memory if Dreaming enabled."""
+        if not self.ctx.managed_agent_config or not self.ctx.managed_agent_config.dreaming_enabled:
+            return
+
+        memory_path = self.ctx.managed_agent_config.get_memory_file("EditorAgent")
+        memory_path.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            import json
+
+            existing = {}
+            if memory_path.exists():
+                existing = json.loads(memory_path.read_text(encoding="utf-8"))
+
+            # Update counters
+            existing["scenes_edited"] = existing.get("scenes_edited", 0) + 1
+            existing["total_surgical_passes"] = (
+                existing.get("total_surgical_passes", 0) + edit_output.edit_passes
+            )
+            existing["total_nofly_violations"] = (
+                existing.get("total_nofly_violations", 0) + edit_output.nofly_violations
+            )
+            existing["total_structural_flags"] = (
+                existing.get("total_structural_flags", 0) + edit_output.structural_flags
+            )
+
+            # Track last 10 scenes
+            if "recent_scenes" not in existing:
+                existing["recent_scenes"] = []
+            existing["recent_scenes"].append(
+                {
+                    "nofly": edit_output.nofly_violations,
+                    "structural": edit_output.structural_flags,
+                    "passes": edit_output.edit_passes,
+                    "clean": edit_output.is_clean,
+                }
+            )
+            existing["recent_scenes"] = existing["recent_scenes"][-10:]
+
+            memory_path.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+            logger.debug("EditorAgent: saved memory (%d scenes)", existing["scenes_edited"])
+        except Exception as exc:
+            logger.warning("EditorAgent: failed to save memory: %s", exc)
