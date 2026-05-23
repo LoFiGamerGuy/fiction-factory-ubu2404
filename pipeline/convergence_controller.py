@@ -35,17 +35,24 @@ class ConvergenceDecision(str, Enum):
 
 
 class ConvergenceController:
-    """Decides the next routing step after quality evaluation."""
+    """Decides the next routing step after quality evaluation.
+
+    Supports Claude Managed Agents (Dreaming) for persistent memory
+    of routing decisions across scenes (if enabled).
+    """
 
     def __init__(
         self,
         max_revisions: int = 3,
         budget_words_threshold: int = 0,
         decisions_log_path: Path | None = None,
+        managed_agent_config: Any = None,  # ManagedAgentConfig | None
     ) -> None:
         self._max_revisions = max_revisions
         self._budget_threshold = budget_words_threshold
         self._log_path = decisions_log_path
+        self._managed_config = managed_agent_config
+        self._load_persistent_memory()
 
     def decide(
         self,
@@ -60,7 +67,11 @@ class ConvergenceController:
                 "ConvergenceController: sensitivity violation → RE_PLAN (scene=%s)",
                 job_context.scene_id,
             )
-            return ConvergenceDecision.RE_PLAN
+            decision = ConvergenceDecision.RE_PLAN
+            self._save_persistent_memory(
+                decision, job_context, revise_count, "sensitivity_violation"
+            )
+            return decision
 
         # 2. Bible contradiction → RE_PLAN (Phase 9 integration)
         if job_context.bible_contradiction:
@@ -68,7 +79,9 @@ class ConvergenceController:
                 "ConvergenceController: bible contradiction → RE_PLAN (scene=%s)",
                 job_context.scene_id,
             )
-            return ConvergenceDecision.RE_PLAN
+            decision = ConvergenceDecision.RE_PLAN
+            self._save_persistent_memory(decision, job_context, revise_count, "bible_contradiction")
+            return decision
 
         # 3. Overdue promises + revisions remaining → REVISE (Phase 9)
         if job_context.overdue_promises and revise_count < self._max_revisions:
@@ -77,7 +90,9 @@ class ConvergenceController:
                 job_context.scene_id,
                 revise_count + 1,
             )
-            return ConvergenceDecision.REVISE
+            decision = ConvergenceDecision.REVISE
+            self._save_persistent_memory(decision, job_context, revise_count, "overdue_promises")
+            return decision
 
         # 4. Quality needs review + under limit → REVISE
         if quality_result.needs_review and revise_count < self._max_revisions:
@@ -87,7 +102,11 @@ class ConvergenceController:
                 revise_count + 1,
                 self._max_revisions,
             )
-            return ConvergenceDecision.REVISE
+            decision = ConvergenceDecision.REVISE
+            self._save_persistent_memory(
+                decision, job_context, revise_count, "quality_needs_review"
+            )
+            return decision
 
         # 5. Quality still needs review at limit → RE_PLAN
         if quality_result.needs_review and revise_count >= self._max_revisions:
@@ -95,15 +114,21 @@ class ConvergenceController:
                 "ConvergenceController: max revisions exhausted → RE_PLAN (scene=%s)",
                 job_context.scene_id,
             )
-            return ConvergenceDecision.RE_PLAN
+            decision = ConvergenceDecision.RE_PLAN
+            self._save_persistent_memory(decision, job_context, revise_count, "revisions_exhausted")
+            return decision
 
         # 6. Budget exhausted → FORCE_RESOLVE + mandatory log
         if self._is_budget_exhausted(job_context):
             self._log_force_resolve(job_context, reason="word_count_budget_exhausted")
-            return ConvergenceDecision.FORCE_RESOLVE
+            decision = ConvergenceDecision.FORCE_RESOLVE
+            self._save_persistent_memory(decision, job_context, revise_count, "budget_exhausted")
+            return decision
 
         # 7. All good → GO
-        return ConvergenceDecision.GO
+        decision = ConvergenceDecision.GO
+        self._save_persistent_memory(decision, job_context, revise_count, "passed")
+        return decision
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -135,3 +160,88 @@ class ConvergenceController:
                     fh.write(json.dumps(entry) + "\n")
             except OSError as exc:
                 logger.error("ConvergenceController: failed to write FORCE_RESOLVE log: %s", exc)
+
+    # ── Persistent Memory (Claude Managed Agents / Dreaming) ──────────────
+
+    def _load_persistent_memory(self) -> None:
+        """Load persistent memory if Dreaming enabled."""
+        if not self._managed_config or not hasattr(self._managed_config, "dreaming_enabled"):
+            return
+        if not self._managed_config.dreaming_enabled:
+            return
+
+        memory_file = self._managed_config.get_memory_file("ConvergenceController")
+        if not memory_file.exists():
+            logger.debug("ConvergenceController: no persistent memory found (first run)")
+            return
+
+        try:
+            memory_data = json.loads(memory_file.read_text(encoding="utf-8"))
+            logger.info(
+                "ConvergenceController: loaded memory (decisions=%d, GO_rate=%.2f%%)",
+                memory_data.get("total_decisions", 0),
+                memory_data.get("go_rate", 0.0) * 100,
+            )
+        except Exception as exc:
+            logger.warning("ConvergenceController: failed to load memory: %s", exc)
+
+    def _save_persistent_memory(
+        self,
+        decision: ConvergenceDecision,
+        job_context: JobContext,
+        revise_count: int,
+        reason: str,
+    ) -> None:
+        """Save persistent memory if Dreaming enabled."""
+        if not self._managed_config or not hasattr(self._managed_config, "dreaming_enabled"):
+            return
+        if not self._managed_config.dreaming_enabled:
+            return
+
+        memory_file = self._managed_config.get_memory_file("ConvergenceController")
+        memory_file.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            existing = {}
+            if memory_file.exists():
+                existing = json.loads(memory_file.read_text(encoding="utf-8"))
+
+            # Update counters
+            existing["total_decisions"] = existing.get("total_decisions", 0) + 1
+            existing["total_GO"] = existing.get("total_GO", 0) + (
+                1 if decision == ConvergenceDecision.GO else 0
+            )
+            existing["total_REVISE"] = existing.get("total_REVISE", 0) + (
+                1 if decision == ConvergenceDecision.REVISE else 0
+            )
+            existing["total_RE_PLAN"] = existing.get("total_RE_PLAN", 0) + (
+                1 if decision == ConvergenceDecision.RE_PLAN else 0
+            )
+            existing["total_FORCE_RESOLVE"] = existing.get("total_FORCE_RESOLVE", 0) + (
+                1 if decision == ConvergenceDecision.FORCE_RESOLVE else 0
+            )
+
+            # Calculate GO rate (convergence efficiency)
+            total = existing["total_decisions"]
+            existing["go_rate"] = existing["total_GO"] / total if total > 0 else 0.0
+
+            # Track last 20 decisions (longer window for convergence analysis)
+            if "recent_decisions" not in existing:
+                existing["recent_decisions"] = []
+            existing["recent_decisions"].append(
+                {
+                    "scene_id": job_context.scene_id,
+                    "decision": decision.value,
+                    "reason": reason,
+                    "revise_count": revise_count,
+                    "timestamp": datetime.now(UTC).isoformat()[:19],  # Truncate to seconds
+                }
+            )
+            existing["recent_decisions"] = existing["recent_decisions"][-20:]
+
+            memory_file.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+            logger.debug(
+                "ConvergenceController: saved memory (%d decisions)", existing["total_decisions"]
+            )
+        except Exception as exc:
+            logger.warning("ConvergenceController: failed to save memory: %s", exc)
