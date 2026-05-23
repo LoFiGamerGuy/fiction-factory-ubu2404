@@ -1,0 +1,14 @@
+{
+  "scenes_edited": 1,
+  "total_surgical_passes": 0,
+  "total_nofly_violations": 0,
+  "total_structural_flags": 1,
+  "recent_scenes": [
+    {
+      "nofly": 0,
+      "structural": 1,
+      "passes": 0,
+      "clean": false
+    }
+  ]
+}

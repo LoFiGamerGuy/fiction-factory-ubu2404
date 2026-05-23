@@ -1,0 +1,9 @@
+{
+  "agent_id": "writer_agent",
+  "scene_id": "scene_01_smoke_test",
+  "job_id": "phase7_smoke_test_job",
+  "generated_at": "2026-05-23T03:14:05.104241+00:00",
+  "view_schema_version": "1.0",
+  "source_file_hashes": {},
+  "provenance_hash": "5cb20a028e8c777d8ec6db7d4a23a8901a50e46f9d2b8c9a4e6bfc0984f73849"
+}

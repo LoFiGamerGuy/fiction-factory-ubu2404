@@ -1,0 +1,38 @@
+{
+  "agent_id": "writer_agent",
+  "scene_id": "scene_01_smoke_test",
+  "job_id": "phase7_smoke_test_job",
+  "generated_at": "2026-05-23T03:14:46.710672+00:00",
+  "view_schema_version": "1.0",
+  "context_tiers": {
+    "scene": "## Current Scene Brief\nEmma, a driven architect, meets Marcus, a passionate chef, at a coffee shop. She accidentally spills coffee on his blueprints. Awkward first encounter with spark of attraction.",
+    "book": "",
+    "series": ""
+  },
+  "author_dashboard_summary": {
+    "book_id": "phase7-smoke-test-book-01",
+    "scene_id": "scene_01_smoke_test",
+    "word_count_total": 0,
+    "interiority_pct_running": 0.0,
+    "dialogue_ratio_running": 0.0,
+    "ai_tell_count_total": 0,
+    "sex_scene_count": 0,
+    "character_arcs": {},
+    "intimacy_pairs": {},
+    "reader_info_known": 0,
+    "reader_info_unknown": 0,
+    "reader_info_active_irony": 0,
+    "subplots_open": 0,
+    "subplots_resolved": 0,
+    "trope_beats_pending": 0,
+    "trope_beats_overdue": 0,
+    "series_promises_open": 0,
+    "scene_rhythm": [],
+    "promises_open": 0,
+    "promises_critical_open": 0,
+    "bible_unresolved_contradictions": 0
+  },
+  "source_file_hashes": {},
+  "provenance_hash": "5cb20a028e8c777d8ec6db7d4a23a8901a50e46f9d2b8c9a4e6bfc0984f73849",
+  "output_path": "/home/gosne/src/workspace/Systems Architecture/data/phase7_smoke_test/without_dreaming/data/series/phase7-smoke-test-series/data/books/phase7-smoke-test-book-01/context_packs/writer_agent/scene_01_smoke_test.json"
+}

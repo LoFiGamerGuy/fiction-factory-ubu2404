@@ -1,0 +1,2 @@
+{"job_id": "phase7_smoke_test_job", "agent_id": "writer_agent", "provider": "anthropic", "model": "claude-haiku-4-5-20251001", "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "duration_ms": 21373.5, "timestamp": "2026-05-23T03:15:08.085071+00:00"}
+{"job_id": "phase7_smoke_test_job", "agent_id": "editor_agent", "provider": "anthropic", "model": "claude-haiku-4-5-20251001", "input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0, "duration_ms": 14262.2, "timestamp": "2026-05-23T03:15:22.349910+00:00"}

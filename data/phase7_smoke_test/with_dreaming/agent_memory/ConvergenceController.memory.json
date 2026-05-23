@@ -1,0 +1,17 @@
+{
+  "total_decisions": 1,
+  "total_GO": 1,
+  "total_REVISE": 0,
+  "total_RE_PLAN": 0,
+  "total_FORCE_RESOLVE": 0,
+  "go_rate": 1.0,
+  "recent_decisions": [
+    {
+      "scene_id": "scene_01_smoke_test",
+      "decision": "GO",
+      "reason": "passed",
+      "revise_count": 0,
+      "timestamp": "2026-05-23T03:14:39"
+    }
+  ]
+}

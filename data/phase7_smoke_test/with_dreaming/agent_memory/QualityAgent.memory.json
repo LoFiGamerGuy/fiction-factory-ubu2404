@@ -1,0 +1,18 @@
+{
+  "scenes_evaluated": 1,
+  "total_pass": 0,
+  "total_warn": 1,
+  "total_fail": 0,
+  "total_sensitivity_violations": 0,
+  "pass_rate": 0.0,
+  "recent_scenes": [
+    {
+      "scene_id": "scene_01_smoke_test",
+      "tier": "warn",
+      "needs_review": false,
+      "nofly": 0,
+      "structural": 1,
+      "sensitivity": false
+    }
+  ]
+}
