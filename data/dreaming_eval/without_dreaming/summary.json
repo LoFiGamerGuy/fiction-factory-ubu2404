@@ -1,0 +1,28 @@
+{
+  "mode": "without_dreaming",
+  "dreaming_enabled": false,
+  "timestamp": "2026-05-22T23:56:06.786960+00:00",
+  "scenes": [
+    {
+      "scene_id": "scene_01_meet_cute",
+      "success": true,
+      "word_count": 1000,
+      "draft_preview": "The morning light hit the waterfront cafe at that perfect angle\u2014the kind that made Emma Chen squint as she settled into her corner table with her oat milk latte and the latest issue of *Architectural Digest*. She'd claimed this spot specifically because it faced away from the water, away from the distractions. She had blueprints to review, a preliminary site assessment due by noon, and approximately zero patience for anything that would derail her focus.\n\nThe blueprints were spread across the sm"
+    },
+    {
+      "scene_id": "scene_02_first_date",
+      "success": true,
+      "word_count": 1019,
+      "draft_preview": "The dining room glowed amber in the late afternoon light, and Marcus found himself straightening the same napkin for the third time. He'd closed the restaurant early\u2014a privilege of ownership that still felt surreal after five years. The staff had cleared out an hour ago, leaving only the soft hum of the kitchen's ventilation and the distant sound of the city beyond the floor-to-ceiling windows.\n\nHe heard her before he saw her. The elevator doors opening, a slight hesitation, then footsteps cross"
+    },
+    {
+      "scene_id": "scene_03_first_conflict",
+      "success": true,
+      "word_count": 1045,
+      "draft_preview": "The coffee shop smelled like cinnamon and regret. Emma was halfway through her latte when she saw him\u2014David, standing in the doorway like a character who'd wandered into the wrong scene. Her stomach dropped. The cup froze at her lips.\n\nHe looked different. Older maybe, or just worn in a way she didn't remember. His hair was shorter. He'd always talked about cutting it. She'd always talked him out of it.\n\n\"Emma.\" Just her name, but it carried the weight of three years. The weight of a ring she'd "
+    }
+  ],
+  "total_scenes": 3,
+  "successful_scenes": 3,
+  "total_words": 3064
+}

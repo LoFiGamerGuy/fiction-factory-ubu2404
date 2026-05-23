@@ -1,0 +1,38 @@
+{
+  "agent_id": "writer_agent",
+  "scene_id": "scene_02_first_date",
+  "job_id": "job_with_dreaming_scene_02_first_date",
+  "generated_at": "2026-05-22T23:54:22.833654+00:00",
+  "view_schema_version": "1.0",
+  "context_tiers": {
+    "scene": "## Current Scene Brief\nMarcus invites Emma to dinner at his restaurant. They discover shared passion for design (architecture vs culinary). First meaningful conversation, vulnerability glimpses. Romantic tension building.",
+    "book": "",
+    "series": ""
+  },
+  "author_dashboard_summary": {
+    "book_id": "dreaming-eval-book-01",
+    "scene_id": "scene_02_first_date",
+    "word_count_total": 0,
+    "interiority_pct_running": 0.0,
+    "dialogue_ratio_running": 0.0,
+    "ai_tell_count_total": 0,
+    "sex_scene_count": 0,
+    "character_arcs": {},
+    "intimacy_pairs": {},
+    "reader_info_known": 0,
+    "reader_info_unknown": 0,
+    "reader_info_active_irony": 0,
+    "subplots_open": 0,
+    "subplots_resolved": 0,
+    "trope_beats_pending": 0,
+    "trope_beats_overdue": 0,
+    "series_promises_open": 0,
+    "scene_rhythm": [],
+    "promises_open": 0,
+    "promises_critical_open": 0,
+    "bible_unresolved_contradictions": 0
+  },
+  "source_file_hashes": {},
+  "provenance_hash": "fc74ed0b7eb6053abebea0ce4cb47282db36422af9fec5f2f5eefe5bea8bd2ff",
+  "output_path": "/home/gosne/src/workspace/Systems Architecture/data/dreaming_eval/with_dreaming/data/books/dreaming-eval-book-01/context_packs/writer_agent/scene_02_first_date.json"
+}

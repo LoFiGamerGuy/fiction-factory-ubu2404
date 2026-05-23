@@ -247,14 +247,21 @@ AgentContext(
 
 ## Approval
 
-**Status:** APPROVED 2026-05-22
+**Status:** APPROVED 2026-05-22 → DECISION EXECUTED 2026-05-22
 
 This BCR has been:
 1. Appended to `IMPLEMENTATION_PLAN.md` as "Baseline Change Request — 2026-05-22"
-2. Recorded in `DECISIONS.md` as DEC-001-001
-3. Implemented in Phase 1 execution
+2. Recorded in `DECISIONS.md` as DEC-001-001 (adoption) and DEC-007-001 (decision outcome)
+3. Implemented in Phase 1 execution (T1.12–T1.15 complete)
+4. **Decision gate executed:** 3-scene smoke test WITH/WITHOUT Dreaming completed
+5. **Decision outcome:** **(3) Both** — Dreaming + EvoSkill complementary retention
 
 **Approval signature line:**
 ```
 APPROVED: 2026-05-22 [User]
+DECISION EXECUTED: 2026-05-22 — Outcome (3) Both
 ```
+
+**Evaluation Report:** `docs/bcr-decisions/DREAMING_EVALUATION_RESULTS.md`  
+**Decision Recorded:** `DECISIONS.md` DEC-007-001  
+**Decision Gate:** `docs/bcr-decisions/dreaming-vs-evoskill.md` (COMPLETE)

@@ -1,0 +1,38 @@
+{
+  "agent_id": "writer_agent",
+  "scene_id": "scene_01_meet_cute",
+  "job_id": "job_without_dreaming_scene_01_meet_cute",
+  "generated_at": "2026-05-22T23:55:10.903153+00:00",
+  "view_schema_version": "1.0",
+  "context_tiers": {
+    "scene": "## Current Scene Brief\nEmma Chen, architect, meets Marcus Rivera, restaurant owner, when she accidentally spills coffee on his blueprints at a waterfront cafe. Awkward but charming first encounter. Spark of attraction.",
+    "book": "",
+    "series": ""
+  },
+  "author_dashboard_summary": {
+    "book_id": "dreaming-eval-book-01",
+    "scene_id": "scene_01_meet_cute",
+    "word_count_total": 0,
+    "interiority_pct_running": 0.0,
+    "dialogue_ratio_running": 0.0,
+    "ai_tell_count_total": 0,
+    "sex_scene_count": 0,
+    "character_arcs": {},
+    "intimacy_pairs": {},
+    "reader_info_known": 0,
+    "reader_info_unknown": 0,
+    "reader_info_active_irony": 0,
+    "subplots_open": 0,
+    "subplots_resolved": 0,
+    "trope_beats_pending": 0,
+    "trope_beats_overdue": 0,
+    "series_promises_open": 0,
+    "scene_rhythm": [],
+    "promises_open": 0,
+    "promises_critical_open": 0,
+    "bible_unresolved_contradictions": 0
+  },
+  "source_file_hashes": {},
+  "provenance_hash": "a63bd34e2f08567c2b4049093ac26d825fcd4449588b360705c162033bd8d8ee",
+  "output_path": "/home/gosne/src/workspace/Systems Architecture/data/dreaming_eval/without_dreaming/data/books/dreaming-eval-book-01/context_packs/writer_agent/scene_01_meet_cute.json"
+}

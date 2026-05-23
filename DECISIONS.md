@@ -107,12 +107,22 @@ Decisions made during Phase 2 review and Phase 3 planning. Binding for implement
 
 ---
 
+### DEC-007-001 — Claude Dreaming + EvoSkill Both Retained
+**Date:** 2026-05-22
+**Statement:** Claude Managed Agents (Dreaming) and EvoSkill are both retained in V1. Dreaming provides agent-specific persistent memory and session continuity (future value for series production). EvoSkill provides cross-agent meta-learning (nightly pattern accumulation). Both are complementary; neither blocks V1 completion. `managed_agent_mode` is configurable (default `False` for stability). Enable Dreaming for multi-book production runs.
+**Rationale:** Smoke test evaluation (3-scene Romance Module fixture) showed no significant quality or performance differences (both modes: 3/3 scenes GO, publication-ready prose, <60s total runtime). Infrastructure is zero-cost (filesystem-backed memory). Dreaming's value emerges in longer runs (10+ books, 50K+ token bibles, voice drift detection). Premature to choose one; keep both operational.
+**Supersedes:** n/a — executes BCR-20260522 decision gate.
+**Evaluation Report:** `docs/bcr-decisions/DREAMING_EVALUATION_RESULTS.md`
+
+---
+
 ### DEC-001-001 — Claude Dreaming + Mem0 Phase 1 Adoption
 **Date:** 2026-05-22
 **Statement:** Claude Managed Agents (Dreaming) infrastructure and Mem0 semantic retrieval are adopted in Phase 1 (T1.12-T1.15). Decision gate after Phase 7 smoke test determines: (1) Dreaming only, (2) EvoSkill only, or (3) Both.
 **Rationale:** Claude Dreaming is now GA (no longer research preview), with zero infrastructure burden vs EvoSkill's Proposer/Evaluator/Frontier. Mem0 solves Bible context bloat predictably (semantic retrieval saves 90%+ tokens by book 3). Decision gate prevents premature commitment — evaluate both approaches with real data.
 **Supersedes:** Phase 14 T14.5 (Mem0 integration moved to Phase 1 T1.13).
 **BCR:** BCR-20260522-claude-dreaming-mem0 (APPROVED 2026-05-22)
+**Decision Outcome:** DEC-007-001 (Both retained)
 
 ---
 

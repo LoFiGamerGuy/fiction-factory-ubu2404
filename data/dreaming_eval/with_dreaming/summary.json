@@ -1,0 +1,28 @@
+{
+  "mode": "with_dreaming",
+  "dreaming_enabled": true,
+  "timestamp": "2026-05-22T23:54:59.645810+00:00",
+  "scenes": [
+    {
+      "scene_id": "scene_01_meet_cute",
+      "success": true,
+      "word_count": 1047,
+      "draft_preview": "The morning light caught the water just right, turning the bay into hammered silver. Emma sat at her usual corner table at Saltwater, a ceramic mug warming her hands, her phone propped against the sugar dispenser as she scrolled through client emails. She'd learned not to check work messages before her second coffee. It made her jittery, made her say things she'd have to apologize for later.\n\nShe didn't see him come in.\n\nThe cafe was half-full\u2014a Saturday morning crowd of locals and tourists, the"
+    },
+    {
+      "scene_id": "scene_02_first_date",
+      "success": true,
+      "word_count": 1047,
+      "draft_preview": "The private table at Meridian sat in the corner of the kitchen's viewing window\u2014Marcus's favorite spot. From here, you could see everything: the controlled chaos of the line, the flames, the precision. Emma arrived at seven, and Marcus felt something shift in his chest the moment she crossed the threshold.\n\nShe wore a charcoal dress that caught the light, her dark hair pulled back to expose the line of her neck. Simple. Elegant. It was the kind of choice that suggested thought, not accident.\n\n\"Y"
+    },
+    {
+      "scene_id": "scene_03_first_conflict",
+      "success": true,
+      "word_count": 1047,
+      "draft_preview": "The knock came at seven-fifteen on a Thursday, the kind of knock that made Emma's stomach drop before she even knew why. Through the peephole, she saw him\u2014David, in a charcoal coat she'd never seen before, holding what looked like takeout from the Thai place they used to love. The one Marcus had never taken her to.\n\nShe didn't open the door immediately. Her hand stayed on the deadbolt while she breathed, counting the seconds like they were currency she was running out of.\n\n\"Em? I know you're hom"
+    }
+  ],
+  "total_scenes": 3,
+  "successful_scenes": 3,
+  "total_words": 3141
+}

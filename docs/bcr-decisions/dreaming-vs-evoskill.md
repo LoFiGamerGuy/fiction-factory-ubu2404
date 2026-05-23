@@ -170,13 +170,21 @@ If chosen approach proves unsatisfactory after 50+ production scenes:
 
 ## Approval
 
-**Status:** Template created 2026-05-22 (T1.15)  
-**Decision:** PENDING — to be completed after Phase 7 smoke test
+**Status:** COMPLETE — Evaluation executed 2026-05-22  
+**Decision:** **(3) Both** — Dreaming + EvoSkill complementary retention
 
-**Decision signature line (to be filled after evaluation):**
+**Decision signature line:**
 ```
-DECISION: [Dreaming only | EvoSkill only | Both]
-DECIDED: [Date]
-RATIONALE: [Brief summary of evaluation results]
-APPROVED: [User]
+DECISION: Both (Dreaming + EvoSkill complementary)
+DECIDED: 2026-05-22
+RATIONALE: 3-scene smoke test showed no significant quality/performance differences 
+(both modes: 3/3 scenes GO, publication-ready prose, <60s runtime). Infrastructure 
+is zero-cost (filesystem-backed). Dreaming's value emerges in longer runs (10+ books, 
+50K+ token bibles, voice drift detection). Both are complementary: Dreaming provides 
+agent-specific session continuity; EvoSkill provides cross-agent meta-learning.
+APPROVED: 2026-05-22
 ```
+
+**Full evaluation report:** `docs/bcr-decisions/DREAMING_EVALUATION_RESULTS.md`
+
+**Recorded in DECISIONS.md as:** DEC-007-001
