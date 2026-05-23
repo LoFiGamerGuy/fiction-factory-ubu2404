@@ -27,7 +27,11 @@ _WARN_THRESHOLD = Verdict.NEGATIVE  # negative but not all metrics → warn
 
 
 class QualityAgent(BaseAgent):
-    """Scores scenes via QualityEvaluator; updates ledgers on FINAL."""
+    """Scores scenes via QualityEvaluator; updates ledgers on FINAL.
+
+    Supports Claude Managed Agents (Dreaming) for persistent memory
+    across quality evaluations (if enabled in AgentContext).
+    """
 
     impl_class: ClassVar[str] = "hybrid"
     version: ClassVar[str] = "1.0"
@@ -35,6 +39,7 @@ class QualityAgent(BaseAgent):
     def __init__(self, ctx: AgentContext) -> None:
         super().__init__(ctx)
         self._evaluator = QualityEvaluator()
+        self._load_persistent_memory()
 
     def _execute(self, job_context: JobContext) -> JobContext:
         editor_data = job_context.output_data.get("editor_agent", {})
@@ -77,6 +82,10 @@ class QualityAgent(BaseAgent):
             sensitivity_violation,
             job_context.scene_id,
         )
+
+        # Save persistent memory if Dreaming enabled
+        self._save_persistent_memory(result)
+
         return job_context.with_output("quality_agent", result.model_dump())
 
     def update_ledgers(self, job_context: JobContext) -> None:
@@ -158,6 +167,84 @@ class QualityAgent(BaseAgent):
             return max(0, book_max - totals.word_count_total)
         except Exception:
             return 50000  # generous default
+
+    # ── Persistent Memory (Claude Managed Agents / Dreaming) ──────────────
+
+    def _load_persistent_memory(self) -> None:
+        """Load persistent memory if Dreaming enabled."""
+        if not self.ctx.managed_agent_config or not self.ctx.managed_agent_config.dreaming_enabled:
+            return
+
+        memory_file = self.ctx.managed_agent_config.get_memory_file("QualityAgent")
+        if not memory_file.exists():
+            logger.debug("QualityAgent: no persistent memory found (first run)")
+            return
+
+        try:
+            import json
+
+            memory_data = json.loads(memory_file.read_text(encoding="utf-8"))
+            logger.info(
+                "QualityAgent: loaded memory (scenes_evaluated=%d, pass_rate=%.2f%%)",
+                memory_data.get("scenes_evaluated", 0),
+                memory_data.get("pass_rate", 0.0) * 100,
+            )
+        except Exception as exc:
+            logger.warning("QualityAgent: failed to load memory: %s", exc)
+
+    def _save_persistent_memory(self, result: QualityResult) -> None:
+        """Save persistent memory if Dreaming enabled."""
+        if not self.ctx.managed_agent_config or not self.ctx.managed_agent_config.dreaming_enabled:
+            return
+
+        memory_file = self.ctx.managed_agent_config.get_memory_file("QualityAgent")
+        memory_file.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            import json
+
+            existing = {}
+            if memory_file.exists():
+                existing = json.loads(memory_file.read_text(encoding="utf-8"))
+
+            # Update counters
+            existing["scenes_evaluated"] = existing.get("scenes_evaluated", 0) + 1
+            existing["total_pass"] = existing.get("total_pass", 0) + (
+                1 if result.tier == "pass" else 0
+            )
+            existing["total_warn"] = existing.get("total_warn", 0) + (
+                1 if result.tier == "warn" else 0
+            )
+            existing["total_fail"] = existing.get("total_fail", 0) + (
+                1 if result.tier == "fail" else 0
+            )
+            existing["total_sensitivity_violations"] = existing.get(
+                "total_sensitivity_violations", 0
+            ) + (1 if result.sensitivity_violation else 0)
+
+            # Calculate pass rate
+            total = existing["scenes_evaluated"]
+            existing["pass_rate"] = existing["total_pass"] / total if total > 0 else 0.0
+
+            # Track last 10 scenes
+            if "recent_scenes" not in existing:
+                existing["recent_scenes"] = []
+            existing["recent_scenes"].append(
+                {
+                    "scene_id": result.scene_id,
+                    "tier": result.tier,
+                    "needs_review": result.needs_review,
+                    "nofly": result.nofly_violations,
+                    "structural": result.structural_flags,
+                    "sensitivity": result.sensitivity_violation,
+                }
+            )
+            existing["recent_scenes"] = existing["recent_scenes"][-10:]
+
+            memory_file.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+            logger.debug("QualityAgent: saved memory (%d scenes)", existing["scenes_evaluated"])
+        except Exception as exc:
+            logger.warning("QualityAgent: failed to save memory: %s", exc)
 
 
 def _check_sensitivity(job_context: JobContext) -> bool:
