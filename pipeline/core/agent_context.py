@@ -36,6 +36,7 @@ class AgentContext:
     log_path: Path
     output_dir: Path
     model_tier: str = "test"
+    llm_provider: str = "openai"
     voice_exemplar_manager: Any = field(default=None)  # Phase 8: VoiceExemplarManager
     managed_agent_config: ManagedAgentConfig = field(default_factory=ManagedAgentConfig)
 

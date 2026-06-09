@@ -62,7 +62,7 @@ class RevisionAgent(BaseAgent):
         output: RevisionOutput = self._router.call(
             messages=messages,
             response_model=RevisionOutput,
-            provider="anthropic",
+            provider=self.ctx.llm_provider,
             seed=job_context.seed,
             job_id=job_context.job_id,
             agent_id="revision_agent",

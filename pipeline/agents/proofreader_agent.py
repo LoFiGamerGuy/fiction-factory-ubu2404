@@ -51,7 +51,7 @@ class ProofreaderAgent(BaseAgent):
         output: ProofreaderOutput = self._router.call(
             messages=messages,
             response_model=ProofreaderOutput,
-            provider="anthropic",
+            provider=self.ctx.llm_provider,
             seed=job_context.seed,
             job_id=job_context.job_id,
             agent_id="proofreader_agent",

@@ -56,7 +56,7 @@ class LineEditorAgent(BaseAgent):
         output: LineEditorOutput = self._router.call(
             messages=messages,
             response_model=LineEditorOutput,
-            provider="anthropic",
+            provider=self.ctx.llm_provider,
             seed=job_context.seed,
             job_id=job_context.job_id,
             agent_id="line_editor_agent",

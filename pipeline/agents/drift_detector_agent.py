@@ -67,7 +67,7 @@ class DriftDetectorAgent(BaseAgent):
         output: DriftDetectorOutput = self._router.call(
             messages=messages,
             response_model=DriftDetectorOutput,
-            provider="anthropic",
+            provider=self.ctx.llm_provider,
             seed=job_context.seed,
             job_id=job_context.job_id,
             agent_id="drift_detector_agent",

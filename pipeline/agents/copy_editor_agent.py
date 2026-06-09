@@ -51,7 +51,7 @@ class CopyEditorAgent(BaseAgent):
         output: CopyEditorOutput = self._router.call(
             messages=messages,
             response_model=CopyEditorOutput,
-            provider="anthropic",
+            provider=self.ctx.llm_provider,
             seed=job_context.seed,
             job_id=job_context.job_id,
             agent_id="copy_editor_agent",

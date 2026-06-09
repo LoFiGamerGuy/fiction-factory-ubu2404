@@ -1,6 +1,6 @@
 """Smoke test (T7.9) — one scene end-to-end with test-tier models.
 
-Skips when ANTHROPIC_API_KEY is not set in the environment.
+Skips when OPENAI_API_KEY is not set in the environment.
 Requires < 90 seconds to complete.
 """
 
@@ -12,11 +12,11 @@ from pathlib import Path
 
 import pytest
 
-_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 
 pytestmark = pytest.mark.skipif(
     not _API_KEY,
-    reason="ANTHROPIC_API_KEY not set — smoke test skipped (fail-closed, not silent)",
+    reason="OPENAI_API_KEY not set — smoke test skipped (fail-closed, not silent)",
 )
 
 

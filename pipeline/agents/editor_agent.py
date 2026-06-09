@@ -162,7 +162,7 @@ class EditorAgent(BaseAgent):
             result: _SurgicalEditOutput = self._router.call(
                 messages=messages,
                 response_model=_SurgicalEditOutput,
-                provider="anthropic",
+                provider=self.ctx.llm_provider,
                 seed=job_context.seed,
                 max_tokens=max(len(text.split()) * 2, 2048),
                 job_id=job_context.job_id,

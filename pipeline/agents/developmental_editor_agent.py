@@ -60,7 +60,7 @@ class DevelopmentalEditorAgent(BaseAgent):
         output: DevelopmentalEditorOutput = self._router.call(
             messages=messages,
             response_model=DevelopmentalEditorOutput,
-            provider="anthropic",
+            provider=self.ctx.llm_provider,
             seed=job_context.seed,
             job_id=job_context.job_id,
             agent_id="developmental_editor_agent",
