@@ -105,6 +105,8 @@ class BookStructuralVerifier:
         total = len(book_output.scenes_completed)
         if total == 0:
             return
+        if total < 4:
+            return
         act_counts: dict[int, int] = {1: 0, 2: 0, 3: 0}
         for slot in inventory.scenes:
             act_counts[slot.act] = act_counts.get(slot.act, 0) + 1
@@ -150,6 +152,15 @@ class BookStructuralVerifier:
         failures: list[FailedCheck],
     ) -> None:
         gs = genre_spec or {}
+        if "heat_curve" not in gs and "heat_curve_waypoints" not in gs:
+            failures.append(
+                FailedCheck(
+                    check_name="heat_curve",
+                    description="Genre spec is missing heat_curve or heat_curve_waypoints.",
+                )
+            )
+            return
+
         heat_curve_name = gs.get("heat_curve", "rising")
         heat_waypoints = _DEFAULT_HEAT_CURVES.get(heat_curve_name, _DEFAULT_HEAT_CURVES["rising"])
         raw_wp = gs.get("heat_curve_waypoints")
@@ -191,12 +202,15 @@ class BookStructuralVerifier:
         if "romance" in genre:
             hea_required = gs.get("hea_required", True)
             if hea_required:
-                cutoff = max(1, int(inventory.total_scenes * 0.95))
-                last_scenes = inventory.scenes[cutoff:]
+                cutoff = min(inventory.total_scenes - 1, max(0, int(inventory.total_scenes * 0.95)))
+                last_scene_ids = {s.scene_id for s in inventory.scenes[cutoff:]}
+                completed_last_scenes = [
+                    s for s in book_output.scenes_completed if s.get("scene_id") in last_scene_ids
+                ]
                 hea_found = any(
-                    s.required_slot_id in ("HEA", "HFN", "HEA_or_HFN")
-                    or s.scene_function in ("hea", "hfn", "resolution")
-                    for s in last_scenes
+                    str(s.get("required_slot_id", "")) in ("HEA", "HFN", "HEA_or_HFN")
+                    or str(s.get("scene_function", "")).lower() in ("hea", "hfn", "resolution")
+                    for s in completed_last_scenes
                 )
                 if not hea_found:
                     failures.append(

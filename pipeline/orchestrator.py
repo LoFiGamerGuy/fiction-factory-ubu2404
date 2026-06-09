@@ -17,6 +17,7 @@ import argparse
 import json
 import logging
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -37,8 +38,183 @@ def _load_config(config_path: Path | None = None) -> dict[str, Any]:
 
 
 def _get_series_root(config: dict[str, Any], series_id: str) -> Path:
-    base = Path(config.get("series_root", "data/series"))
+    base = Path(str(config.get("series_root", "data/series")))
     return base / series_id
+
+
+def _get_layout(config: dict[str, Any], series_id: str, book_id: str) -> Any:
+    from pipeline.core.project_layout import ProjectLayout
+
+    return ProjectLayout(series_root=_get_series_root(config, series_id), book_id=book_id)
+
+
+def _resolve_series_id(config: dict[str, Any], series_id: str | None = None) -> str:
+    value = series_id or config.get("series_id")
+    if not value:
+        raise ValueError("series_id required; pass --series-id or set series_id in config")
+    return str(value)
+
+
+def _resolve_book_id(config: dict[str, Any], book_id: str | None = None) -> str:
+    value = book_id or config.get("book_id")
+    if not value:
+        raise ValueError("book_id required; pass --book-id or set book_id in config")
+    return str(value)
+
+
+def _schema_path(config: dict[str, Any]) -> Path | None:
+    raw = config.get("schema_path")
+    return Path(str(raw)) if raw else None
+
+
+def _load_inventory(layout: Any) -> Any:
+    from pipeline.book_structure_planner import SceneInventory
+
+    inventory_path = layout.scene_inventory_path()
+    if not inventory_path.exists():
+        raise FileNotFoundError(f"scene_inventory.json not found at {inventory_path}")
+    return SceneInventory.from_path(inventory_path)
+
+
+def _find_scene_slot(inventory: Any, scene_id: str) -> Any:
+    for slot in inventory.scenes:
+        if slot.scene_id == scene_id:
+            return slot
+    raise ValueError(f"scene_id {scene_id!r} not found in scene inventory")
+
+
+def _make_project_spec(book_id: str, series_id: str, genre_spec: dict[str, Any]) -> Any:
+    from pipeline.profiles.project_spec import (
+        ProjectSpec,
+        ResolvedAudienceExpectations,
+        ResolvedGenreConfig,
+        ResolvedGoalWeights,
+        ResolvedSensitivityThresholds,
+        ResolvedVoiceAxes,
+    )
+
+    word_count_target = int(genre_spec.get("word_count_target", 100000))
+    scene_functions = tuple(genre_spec.get("scene_function_vocabulary", ()))
+    return ProjectSpec(
+        book_id=book_id,
+        series_id=series_id,
+        voice_axes=ResolvedVoiceAxes(),
+        genre_config=ResolvedGenreConfig(
+            genre_name=str(genre_spec.get("genre_name", "romance")),
+            scene_function_vocabulary=scene_functions,
+            word_count_min=1,
+            word_count_max=max(word_count_target, 1),
+        ),
+        sensitivity_thresholds=ResolvedSensitivityThresholds(),
+        goal_weights=ResolvedGoalWeights(),
+        audience_expectations=ResolvedAudienceExpectations(),
+    )
+
+
+def _make_job_context(
+    *,
+    config: dict[str, Any],
+    series_id: str,
+    book_id: str,
+    scene_id: str,
+    slot: Any,
+    genre_spec: dict[str, Any],
+) -> Any:
+    from pipeline.core.job_context import JobContext
+
+    scene_brief = str(
+        config.get("scene_brief")
+        or f"Write {slot.scene_function} for {scene_id} in chapter {slot.chapter}."
+    )
+    return JobContext(
+        job_id=str(config.get("job_id") or f"{book_id}:{scene_id}"),
+        series_id=series_id,
+        book_id=book_id,
+        chapter_id=int(slot.chapter),
+        scene_id=scene_id,
+        spec=_make_project_spec(book_id, series_id, genre_spec),
+        model_tier=str(config.get("model_tier", "test")),
+        seed=int(config.get("seed", 0)),
+        scene_brief=scene_brief,
+        word_count_target=int(slot.word_count_target),
+        heat_level=int(slot.heat_level_target),
+    )
+
+
+def _make_job_runner(
+    *,
+    config: dict[str, Any],
+    layout: Any,
+    series_id: str,
+    book_id: str,
+    checkpoint_db_path: Path | None = None,
+) -> Any:
+    from pipeline.core.agent_context import AgentContext
+    from pipeline.core.model_router import ModelRouter
+    from pipeline.job_runner import JobRunner
+    from pipeline.ledgers.ledger_manager import LedgerManager
+    from pipeline.profiles.spec_loader import SpecLoader
+
+    model_router_path = Path(str(config.get("model_router_path", "model_router.json")))
+    data_root = Path(str(config.get("data_root", layout.series_root / "data" / "ledgers")))
+    model_tier = str(config.get("model_tier", "test"))
+    router = ModelRouter(config_path=model_router_path, cost_log_path=layout.cost_log_path())
+    agent_ctx = AgentContext(
+        project_layout=layout,
+        spec_loader=SpecLoader(workspace_root=Path(str(config.get("workspace_root", ".")))),
+        ledger_manager=LedgerManager(book_id=book_id, series_id=series_id, data_root=data_root),
+        log_path=layout.agent_log_path("orchestrator"),
+        output_dir=Path(str(config.get("output_dir", "output"))) / book_id,
+        model_tier=model_tier,
+        llm_provider=str(config.get("llm_provider", "openai")),
+    )
+    return JobRunner(
+        agent_ctx=agent_ctx,
+        model_router=router,
+        max_revisions=int(config.get("max_revisions", 3)),
+        checkpoint_db_path=str(checkpoint_db_path) if checkpoint_db_path else None,
+    )
+
+
+def _read_scene_history(layout: Any) -> list[dict[str, Any]]:
+    scene_history_path = layout.scene_history_path()
+    if not scene_history_path.exists():
+        return []
+    scenes_completed: list[dict[str, Any]] = []
+    for line in scene_history_path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            scenes_completed.append(json.loads(line))
+    return scenes_completed
+
+
+def _record_scene_result(layout: Any, slot: Any, result: Any) -> None:
+    final_text = str(result.final_text or "")
+    if final_text:
+        manuscript_path = layout.manuscript_path()
+        manuscript_path.parent.mkdir(parents=True, exist_ok=True)
+        existing = manuscript_path.read_text(encoding="utf-8") if manuscript_path.exists() else ""
+        separator = "\n\n" if existing else ""
+        manuscript_path.write_text(
+            f"{existing}{separator}## {slot.scene_id}\n\n{final_text}\n",
+            encoding="utf-8",
+        )
+
+    history_path = layout.scene_history_path()
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+    history_entry = {
+        "scene_id": slot.scene_id,
+        "chapter": slot.chapter,
+        "act": slot.act,
+        "heat_level": slot.heat_level_target,
+        "scene_function": slot.scene_function,
+        "required_slot_id": slot.required_slot_id,
+        "word_count": len(final_text.split()),
+        "convergence_decision": result.convergence_decision,
+        "force_resolved": result.force_resolved,
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
+    with history_path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(history_entry) + "\n")
 
 
 # ── Commands ───────────────────────────────────────────────────────────────────
@@ -47,27 +223,26 @@ def _get_series_root(config: dict[str, Any], series_id: str) -> Path:
 def cmd_validate_spec(spec_path: str, config: dict[str, Any]) -> int:
     from pipeline.spec_validator_agent import SpecValidatorAgent
 
-    agent = SpecValidatorAgent()
+    agent = SpecValidatorAgent(schema_path=_schema_path(config))
     result = agent.validate(Path(spec_path))
     if result.valid:
         print(f"OK: {spec_path} is valid")
         return 0
-    else:
-        for err in result.errors:
-            print(f"ERROR: {err}", file=sys.stderr)
-        return 1
+    for err in result.errors:
+        print(f"ERROR: {err}", file=sys.stderr)
+    return 1
 
 
 def cmd_init_book(series_id: str, book_number: int, config: dict[str, Any]) -> int:
     from pipeline.book_structure_planner import BookStructurePlanner
     from pipeline.spec_loader import SeriesSpecLoader
 
-    series_root = _get_series_root(config, series_id)
     book_id = f"book{book_number:02d}"
+    layout = _get_layout(config, series_id, book_id)
 
-    loader = SeriesSpecLoader(workspace_root=Path("."))
-    series_spec_path = series_root / "spec.yaml"
-    book_spec_path = series_root / book_id / "spec.yaml"
+    loader = SeriesSpecLoader(workspace_root=Path("."), schema_path=_schema_path(config))
+    series_spec_path = layout.series_spec_path()
+    book_spec_path = layout.book_spec_path()
 
     if not series_spec_path.exists():
         print(f"ERROR: series spec not found: {series_spec_path}", file=sys.stderr)
@@ -80,106 +255,132 @@ def cmd_init_book(series_id: str, book_number: int, config: dict[str, Any]) -> i
         print(f"ERROR loading spec: {exc}", file=sys.stderr)
         return 1
 
-    book_dir = series_root / book_id
     planner = BookStructurePlanner()
     inventory = planner.plan(
         book_id=book_id,
         series_id=series_id,
         series_spec=series_spec,
         book_spec=book_spec,
-        book_dir=book_dir,
+        book_dir=layout.book_dir(),
+        inventory_path=layout.scene_inventory_path(),
     )
     print(f"Initialized book '{book_id}': {inventory.total_scenes} scenes planned.")
-    print(f"Scene inventory: {book_dir / 'scene_inventory.json'}")
+    print(f"Scene inventory: {layout.scene_inventory_path()}")
     return 0
 
 
-def cmd_job(scene_id: str, config: dict[str, Any]) -> int:
+def cmd_job(scene_id: str, series_id: str, book_id: str, config: dict[str, Any]) -> int:
+    from pipeline.spec_loader import SeriesSpecLoader
+
+    layout = _get_layout(config, series_id, book_id)
+    loader = SeriesSpecLoader(workspace_root=Path("."), schema_path=_schema_path(config))
+    try:
+        series_spec = loader.load(layout.series_spec_path())
+        inventory = _load_inventory(layout)
+        slot = _find_scene_slot(inventory, scene_id)
+        job_context = _make_job_context(
+            config=config,
+            series_id=series_id,
+            book_id=book_id,
+            scene_id=scene_id,
+            slot=slot,
+            genre_spec=series_spec.get("genre_config", {}),
+        )
+        runner = _make_job_runner(
+            config=config,
+            layout=layout,
+            series_id=series_id,
+            book_id=book_id,
+        )
+        result = runner.run_scene(job_context)
+    except Exception as exc:
+        print(f"ERROR running scene job: {exc}", file=sys.stderr)
+        return 1
+
+    if result.error and not result.final_text:
+        print(f"ERROR: scene '{scene_id}' failed: {result.error}", file=sys.stderr)
+        return 1
+
+    _record_scene_result(layout, slot, result)
     print(
-        "ERROR: --job requires a configured JobRunner with spec/book context. "
-        "Use JobRunner directly or extend this command with --series-id/--book-id flags.",
-        file=sys.stderr,
+        f"FINAL: scene '{scene_id}' decision={result.convergence_decision} "
+        f"force_resolved={result.force_resolved}"
     )
-    return 1
+    return 0
 
 
-def cmd_resume(thread_id: str, config: dict[str, Any]) -> int:
-    print(
-        f"ERROR: --resume requires a configured SceneStateMachine. "
-        f"Use SceneStateMachine.resume('{thread_id}') directly.",
-        file=sys.stderr,
-    )
-    return 1
+def cmd_resume(
+    thread_id: str,
+    scene_id: str,
+    series_id: str,
+    book_id: str,
+    config: dict[str, Any],
+) -> int:
+    from pipeline.spec_loader import SeriesSpecLoader
+
+    layout = _get_layout(config, series_id, book_id)
+    checkpoint_db_path = Path(str(config.get("checkpoint_db_path", layout.checkpoint_db_path())))
+    loader = SeriesSpecLoader(workspace_root=Path("."), schema_path=_schema_path(config))
+    try:
+        series_spec = loader.load(layout.series_spec_path())
+        inventory = _load_inventory(layout)
+        slot = _find_scene_slot(inventory, scene_id)
+        job_context = _make_job_context(
+            config=config,
+            series_id=series_id,
+            book_id=book_id,
+            scene_id=scene_id,
+            slot=slot,
+            genre_spec=series_spec.get("genre_config", {}),
+        )
+        runner = _make_job_runner(
+            config=config,
+            layout=layout,
+            series_id=series_id,
+            book_id=book_id,
+            checkpoint_db_path=checkpoint_db_path,
+        )
+        result = runner.resume(thread_id, job_context)
+    except Exception as exc:
+        print(f"ERROR resuming scene job: {exc}", file=sys.stderr)
+        return 1
+
+    if result is None:
+        print(
+            f"ERROR: checkpoint thread not found or checkpointing disabled: {thread_id}",
+            file=sys.stderr,
+        )
+        return 1
+    _record_scene_result(layout, slot, result)
+    print(f"RESUMED: scene '{scene_id}' decision={result.convergence_decision}")
+    return 0
 
 
 def cmd_verify_book(book_id: str, series_id: str, config: dict[str, Any]) -> int:
-    import json as _json
-
     from pipeline.book_structural_verifier import BookOutput, BookStructuralVerifier
-    from pipeline.book_structure_planner import SceneInventory, SceneSlot
-    from pipeline.profiles.project_spec import (
-        ProjectSpec,
-        ResolvedAudienceExpectations,
-        ResolvedGenreConfig,
-        ResolvedGoalWeights,
-        ResolvedSensitivityThresholds,
-        ResolvedVoiceAxes,
-    )
-
-    series_root = _get_series_root(config, series_id)
-    book_dir = series_root / book_id
-    inventory_path = book_dir / "scene_inventory.json"
-
-    if not inventory_path.exists():
-        print(f"ERROR: scene_inventory.json not found at {inventory_path}", file=sys.stderr)
-        return 1
-
-    raw_inv = _json.loads(inventory_path.read_text(encoding="utf-8"))
-    slots = [SceneSlot(**s) for s in raw_inv["scenes"]]
-    inventory = SceneInventory(
-        book_id=raw_inv["book_id"],
-        series_id=raw_inv["series_id"],
-        total_scenes=raw_inv["total_scenes"],
-        word_count_target=raw_inv["word_count_target"],
-        scenes=slots,
-    )
-
-    # Build a minimal spec from the series spec if available
     from pipeline.spec_loader import SeriesSpecLoader
 
-    loader = SeriesSpecLoader(workspace_root=Path("."))
-    series_spec_path = series_root / "spec.yaml"
+    layout = _get_layout(config, series_id, book_id)
+    loader = SeriesSpecLoader(workspace_root=Path("."), schema_path=_schema_path(config))
     genre_name = "romance"
     genre_spec: dict[str, Any] = {}
-    if series_spec_path.exists():
-        try:
-            ss = loader.load(series_spec_path)
-            genre_name = ss.get("genre_config", {}).get("genre_name", "romance")
-            genre_spec = ss.get("genre_config", {})
-        except Exception:
-            pass
+    try:
+        inventory = _load_inventory(layout)
+        if layout.series_spec_path().exists():
+            series_spec = loader.load(layout.series_spec_path())
+            genre_spec = series_spec.get("genre_config", {})
+            genre_name = str(genre_spec.get("genre_name", genre_name))
+    except Exception as exc:
+        print(f"ERROR loading verification inputs: {exc}", file=sys.stderr)
+        return 1
 
-    spec = ProjectSpec(
-        book_id=book_id,
-        series_id=series_id,
-        voice_axes=ResolvedVoiceAxes(),
-        genre_config=ResolvedGenreConfig(genre_name=genre_name),
-        sensitivity_thresholds=ResolvedSensitivityThresholds(),
-        goal_weights=ResolvedGoalWeights(),
-        audience_expectations=ResolvedAudienceExpectations(),
-    )
+    spec = _make_project_spec(book_id, series_id, {**genre_spec, "genre_name": genre_name})
 
-    # Build BookOutput from scene history if available
-    manuscript_path = book_dir / "manuscript.md"
-    word_count = 0
-    if manuscript_path.exists():
+    scenes_completed = _read_scene_history(layout)
+    word_count = sum(int(scene.get("word_count", 0)) for scene in scenes_completed)
+    manuscript_path = layout.manuscript_path()
+    if word_count == 0 and manuscript_path.exists():
         word_count = len(manuscript_path.read_text(encoding="utf-8").split())
-    scene_history_path = book_dir / "scene_history.jsonl"
-    scenes_completed: list[dict[str, Any]] = []
-    if scene_history_path.exists():
-        for line in scene_history_path.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                scenes_completed.append(_json.loads(line))
 
     book_output = BookOutput(
         book_id=book_id,
@@ -208,12 +409,11 @@ def cmd_book_publish(book_id: str, series_id: str, config: dict[str, Any]) -> in
         print("ERROR: --book-publish aborted; fix verify-book failures first.", file=sys.stderr)
         return rc
 
-    series_root = _get_series_root(config, series_id)
-    book_dir = series_root / book_id
-    out_dir = Path(config.get("output_dir", "output")) / book_id
+    layout = _get_layout(config, series_id, book_id)
+    out_dir = Path(str(config.get("output_dir", "output"))) / book_id
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    manuscript = book_dir / "manuscript.md"
+    manuscript = layout.manuscript_path()
     if manuscript.exists():
         import shutil
 
@@ -231,7 +431,19 @@ def cmd_book_publish(book_id: str, series_id: str, config: dict[str, Any]) -> in
 
 
 def cmd_status(config: dict[str, Any]) -> int:
-    print("Status: no active run. Use --job <scene_id> to start.")
+    series_id = config.get("series_id")
+    book_id = config.get("book_id")
+    if not series_id or not book_id:
+        print("Status: no active run. Configure series_id/book_id, then use --job <scene_id>.")
+        return 0
+
+    layout = _get_layout(config, str(series_id), str(book_id))
+    inventory_exists = layout.scene_inventory_path().exists()
+    scenes_completed = _read_scene_history(layout)
+    print(
+        f"Status: series={series_id} book={book_id} "
+        f"inventory={'yes' if inventory_exists else 'no'} completed_scenes={len(scenes_completed)}"
+    )
     return 0
 
 
@@ -248,10 +460,13 @@ def build_parser() -> argparse.ArgumentParser:
     group.add_argument("--init-book", nargs=2, metavar=("SERIES_ID", "BOOK_NUMBER"))
     group.add_argument("--job", metavar="SCENE_ID")
     group.add_argument("--resume", metavar="THREAD_ID")
-    group.add_argument("--verify-book", nargs=2, metavar=("BOOK_ID", "SERIES_ID"))
-    group.add_argument("--book-publish", nargs=2, metavar=("BOOK_ID", "SERIES_ID"))
+    group.add_argument("--verify-book", nargs="+", metavar="BOOK_ID")
+    group.add_argument("--book-publish", nargs="+", metavar="BOOK_ID")
     group.add_argument("--status", action="store_true")
     parser.add_argument("--config", metavar="CONFIG_PATH", default=None)
+    parser.add_argument("--series-id", default=None)
+    parser.add_argument("--book-id", default=None)
+    parser.add_argument("--scene-id", default=None)
     return parser
 
 
@@ -259,24 +474,64 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     config = _load_config(Path(args.config) if args.config else None)
+    if args.series_id:
+        config = {**config, "series_id": args.series_id}
+    if args.book_id:
+        config = {**config, "book_id": args.book_id}
 
-    if args.validate_spec:
-        return cmd_validate_spec(args.validate_spec, config)
-    if args.init_book:
-        series_id, book_number_str = args.init_book
-        return cmd_init_book(series_id, int(book_number_str), config)
-    if args.job:
-        return cmd_job(args.job, config)
-    if args.resume:
-        return cmd_resume(args.resume, config)
-    if args.verify_book:
-        book_id, series_id = args.verify_book
-        return cmd_verify_book(book_id, series_id, config)
-    if args.book_publish:
-        book_id, series_id = args.book_publish
-        return cmd_book_publish(book_id, series_id, config)
-    if args.status:
-        return cmd_status(config)
+    try:
+        if args.validate_spec:
+            return cmd_validate_spec(args.validate_spec, config)
+        if args.init_book:
+            series_id, book_number_str = args.init_book
+            return cmd_init_book(series_id, int(book_number_str), config)
+        if args.job:
+            return cmd_job(
+                args.job,
+                _resolve_series_id(config, args.series_id),
+                _resolve_book_id(config, args.book_id),
+                config,
+            )
+        if args.resume:
+            scene_id = str(
+                args.scene_id or config.get("resume_scene_id") or config.get("scene_id") or ""
+            )
+            if not scene_id:
+                raise ValueError(
+                    "scene_id required for --resume; pass --scene-id or set scene_id in config"
+                )
+            return cmd_resume(
+                args.resume,
+                scene_id,
+                _resolve_series_id(config, args.series_id),
+                _resolve_book_id(config, args.book_id),
+                config,
+            )
+        if args.verify_book:
+            if len(args.verify_book) not in (1, 2):
+                raise ValueError("--verify-book expects BOOK_ID or BOOK_ID SERIES_ID")
+            book_id = str(args.verify_book[0])
+            series_id = (
+                str(args.verify_book[1])
+                if len(args.verify_book) == 2
+                else _resolve_series_id(config, args.series_id)
+            )
+            return cmd_verify_book(book_id, series_id, config)
+        if args.book_publish:
+            if len(args.book_publish) not in (1, 2):
+                raise ValueError("--book-publish expects BOOK_ID or BOOK_ID SERIES_ID")
+            book_id = str(args.book_publish[0])
+            series_id = (
+                str(args.book_publish[1])
+                if len(args.book_publish) == 2
+                else _resolve_series_id(config, args.series_id)
+            )
+            return cmd_book_publish(book_id, series_id, config)
+        if args.status:
+            return cmd_status(config)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
     return 1
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from pipeline.book_structure_planner import (
     _DEFAULT_HEAT_CURVES,
@@ -10,7 +11,7 @@ from pipeline.book_structure_planner import (
     _interpolate_heat,
 )
 
-_ROMANCE_SERIES_SPEC = {
+_ROMANCE_SERIES_SPEC: dict[str, Any] = {
     "series_id": "series_test",
     "genre_config": {
         "genre_name": "romance",
@@ -28,7 +29,11 @@ _ROMANCE_SERIES_SPEC = {
     },
 }
 
-_BOOK_SPEC_SIMPLE = {"chapter_count": 10, "scenes_per_chapter": 2, "word_count_target": 40000}
+_BOOK_SPEC_SIMPLE: dict[str, Any] = {
+    "chapter_count": 10,
+    "scenes_per_chapter": 2,
+    "word_count_target": 40000,
+}
 
 
 class TestHeatInterpolation:
@@ -128,3 +133,21 @@ class TestHeatLevelsInterpolated:
         )
         acts = {s.act for s in inv.scenes}
         assert 1 in acts and 2 in acts and 3 in acts
+
+    def test_hea_slot_lands_in_final_scene(self, tmp_path: Path) -> None:
+        planner = BookStructurePlanner()
+        series_spec = {
+            **_ROMANCE_SERIES_SPEC,
+            "genre_config": {
+                **_ROMANCE_SERIES_SPEC["genre_config"],
+                "required_scene_slots": ["meet_cute", "HEA_or_HFN"],
+            },
+        }
+        inv = planner.plan(
+            book_id="book01",
+            series_id="series_test",
+            series_spec=series_spec,
+            book_spec=_BOOK_SPEC_SIMPLE,
+            book_dir=tmp_path / "book01",
+        )
+        assert inv.scenes[-1].required_slot_id == "HEA_or_HFN"

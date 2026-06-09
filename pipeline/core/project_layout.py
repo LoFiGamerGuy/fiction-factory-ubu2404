@@ -57,6 +57,9 @@ class ProjectLayout:
     def scene_inventory_path(self) -> Path:
         return self.book_dir() / "scene_inventory.json"
 
+    def checkpoint_db_path(self) -> Path:
+        return self.book_dir() / "scene_checkpoints.sqlite"
+
     def scene_output_path(self, chapter: int, scene_id: str) -> Path:
         return self.book_dir() / "scenes" / f"{scene_id}.md"
 

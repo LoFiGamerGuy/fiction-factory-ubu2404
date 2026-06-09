@@ -95,6 +95,27 @@ class TestWordCountCheck:
 
 
 class TestHeatCurveViolation:
+    def test_missing_heat_curve_fails(self, tmp_path: Path) -> None:
+        inv = _make_inventory(tmp_path)
+        book_output = BookOutput(
+            book_id="book01",
+            actual_word_count=80000,
+            scenes_completed=[
+                {
+                    "scene_id": s.scene_id,
+                    "chapter": s.chapter,
+                    "heat_level": s.heat_level_target,
+                    "scene_function": s.scene_function,
+                }
+                for s in inv.scenes
+            ],
+        )
+        spec = _make_spec()
+        verifier = BookStructuralVerifier()
+        report = verifier.verify(book_output, spec, inv, {"genre_name": "romance"})
+        heat_failures = [f for f in report.failed_checks if f.check_name == "heat_curve"]
+        assert len(heat_failures) == 1
+
     def test_heat_violation_detected(self, tmp_path: Path) -> None:
         inv = _make_inventory(tmp_path)
         # Set all scenes to heat_level=1 (violates rising curve for later scenes)

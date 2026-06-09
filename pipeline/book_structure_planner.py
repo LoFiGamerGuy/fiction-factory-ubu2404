@@ -44,6 +44,19 @@ class SceneInventory:
     word_count_target: int
     scenes: list[SceneSlot] = field(default_factory=list)
 
+    @classmethod
+    def from_path(cls, inventory_path: Path) -> SceneInventory:
+        """Load a persisted scene inventory from JSON."""
+        raw: dict[str, Any] = json.loads(inventory_path.read_text(encoding="utf-8"))
+        slots = [SceneSlot(**scene) for scene in raw["scenes"]]
+        return cls(
+            book_id=str(raw["book_id"]),
+            series_id=str(raw["series_id"]),
+            total_scenes=int(raw["total_scenes"]),
+            word_count_target=int(raw["word_count_target"]),
+            scenes=slots,
+        )
+
 
 def _interpolate_heat(position: float, waypoints: list[tuple[float, int]]) -> int:
     """Linear interpolation between waypoints; clamps to [waypoints[0], waypoints[-1]]."""
@@ -74,6 +87,7 @@ class BookStructurePlanner:
         series_spec: dict[str, Any],
         book_spec: dict[str, Any],
         book_dir: Path,
+        inventory_path: Path | None = None,
     ) -> SceneInventory:
         """Generate scene inventory and write it to book_dir/scene_inventory.json."""
         genre_config = series_spec.get("genre_config", {})
@@ -130,13 +144,13 @@ class BookStructurePlanner:
             req_slot: str | None = None
             if required_slots and required_slot_idx < len(required_slots):
                 # Distribute required slots evenly across the book
-                expected_idx = int(
-                    required_slots.index(required_slots[required_slot_idx])
-                    * total_scenes
-                    / len(required_slots)
-                )
+                slot_id = required_slots[required_slot_idx]
+                if slot_id in {"HEA", "HFN", "HEA_or_HFN"}:
+                    expected_idx = total_scenes - 1
+                else:
+                    expected_idx = int(required_slot_idx * total_scenes / len(required_slots))
                 if idx >= expected_idx:
-                    req_slot = required_slots[required_slot_idx]
+                    req_slot = slot_id
                     required_slot_idx += 1
 
             scene_id = f"ch{chapter:02d}_sc{scene_number:02d}"
@@ -162,9 +176,9 @@ class BookStructurePlanner:
             scenes=scenes,
         )
 
-        book_dir.mkdir(parents=True, exist_ok=True)
-        inventory_path = book_dir / "scene_inventory.json"
-        inventory_path.write_text(
+        target_path = inventory_path or book_dir / "scene_inventory.json"
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        target_path.write_text(
             json.dumps(
                 {
                     "book_id": inventory.book_id,
@@ -177,5 +191,5 @@ class BookStructurePlanner:
             ),
             encoding="utf-8",
         )
-        logger.info("BookStructurePlanner: wrote %d scenes to %s", total_scenes, inventory_path)
+        logger.info("BookStructurePlanner: wrote %d scenes to %s", total_scenes, target_path)
         return inventory
