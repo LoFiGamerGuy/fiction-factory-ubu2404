@@ -101,8 +101,9 @@ class PaperclipClient:
     ) -> bool:
         """Submit an approval request and poll until approved/rejected/timeout.
 
-        Returns True when approved.  Returns True if Paperclip is not configured.
-        Returns True on HTTP errors (graceful degradation).
+        Returns True when approved or Paperclip is not configured.
+        Returns False when rejected or timed out. Returns True on HTTP errors
+        (graceful degradation).
         """
         if not self._configured:
             return True
@@ -160,11 +161,11 @@ class PaperclipClient:
             time.sleep(_POLL_INTERVAL_S)
 
         logger.warning(
-            "PaperclipClient.request_approval(%s): timed out after %ds — returning True",
+            "PaperclipClient.request_approval(%s): timed out after %ds — returning False",
             gate_name,
             timeout_s,
         )
-        return True
+        return False
 
     def heartbeat(self) -> bool:
         """GET /health; returns True if healthy, True on error (graceful degradation)."""

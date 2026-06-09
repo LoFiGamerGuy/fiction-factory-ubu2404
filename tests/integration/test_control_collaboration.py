@@ -134,6 +134,27 @@ class TestPaperclipRequestApprovalImmediate:
         )
 
 
+class TestPaperclipRequestApprovalTimeout:
+    """Approval gate timeout fails closed per T011-001."""
+
+    def test_paperclip_request_approval_timeout(self, paperclip_env: None) -> None:
+        from pipeline.control.paperclip_client import PaperclipClient
+
+        post_resp = _mock_response(200, {"approval_id": "appr-002"})
+
+        with patch("pipeline.control.paperclip_client.httpx.Client") as mock_client_cls:
+            mock_ctx = MagicMock()
+            mock_client_cls.return_value.__enter__.return_value = mock_ctx
+            mock_ctx.post.return_value = post_resp
+
+            client = PaperclipClient()
+            result = client.request_approval("spec_signoff", {"phase": 11}, timeout_s=0)
+
+        assert result is False
+        mock_ctx.post.assert_called_once()
+        mock_ctx.get.assert_not_called()
+
+
 # ── WUPHF tests ───────────────────────────────────────────────────────────────
 
 

@@ -67,6 +67,106 @@ def _schema_path(config: dict[str, Any]) -> Path | None:
     return Path(str(raw)) if raw else None
 
 
+def _approval_timeout_s(config: dict[str, Any]) -> int:
+    return int(config.get("approval_timeout_s", 3600))
+
+
+def _check_control_budget(config: dict[str, Any], agent_role: str = "orchestrator") -> bool:
+    from pipeline.control.paperclip_client import PaperclipClient
+
+    if PaperclipClient().check_budget(agent_role):
+        return True
+    print(f"ERROR: Paperclip budget exhausted for agent_role={agent_role}", file=sys.stderr)
+    return False
+
+
+def _request_control_approval(
+    gate_name: str,
+    context: dict[str, Any],
+    config: dict[str, Any],
+) -> bool:
+    from pipeline.control.paperclip_client import PaperclipClient
+
+    if PaperclipClient().request_approval(
+        gate_name=gate_name,
+        context=context,
+        timeout_s=_approval_timeout_s(config),
+    ):
+        return True
+    print(f"ERROR: Paperclip approval gate rejected or timed out: {gate_name}", file=sys.stderr)
+    return False
+
+
+def _record_control_cost(
+    config: dict[str, Any],
+    agent_role: str = "orchestrator",
+    cost_key: str = "orchestrator_cost_usd",
+    token_key: str = "orchestrator_tokens_used",
+) -> None:
+    from pipeline.control.paperclip_client import PaperclipClient
+
+    PaperclipClient().record_cost(
+        agent_role=agent_role,
+        cost_usd=float(config.get(cost_key, 0.0)),
+        tokens_used=int(config.get(token_key, 0)),
+    )
+
+
+def _post_control_activity(
+    message: str,
+    metadata: dict[str, Any] | None = None,
+    room: str | None = None,
+) -> None:
+    from pipeline.control.wuphf_client import WUPHFClient
+
+    WUPHFClient().post_to_channel(
+        "pipeline",
+        message,
+        room=room,
+        metadata=metadata,
+    )
+
+
+def _update_control_wiki(page: str, content: str) -> None:
+    from pipeline.control.wuphf_client import WUPHFClient
+
+    WUPHFClient().update_wiki(page, content, author="orchestrator")
+
+
+def _verify_roma_plan(
+    *,
+    series_id: str,
+    book_id: str,
+    series_spec: dict[str, Any],
+    book_spec: dict[str, Any],
+) -> Any | None:
+    from pipeline.control.roma_client import ROMAClient
+
+    roma_spec = {**series_spec, "books": [{**book_spec, "book_id": book_id}]}
+    client = ROMAClient()
+    plan = client.decompose(roma_spec)
+    verification = client.verify(plan)
+    if not verification.valid:
+        errors = "; ".join(verification.errors) if verification.errors else "unknown error"
+        print(
+            f"ERROR: ROMA rejected decomposition for {series_id}/{book_id}: {errors}",
+            file=sys.stderr,
+        )
+        return None
+    return plan
+
+
+def _roma_plan_markdown(plan: Any, series_id: str, book_id: str) -> str:
+    total_scenes = sum(int(book.total_scenes) for book in plan.book_plans)
+    return (
+        "# ROMA Planning Summary\n\n"
+        f"Series: {series_id}\n"
+        f"Book: {book_id}\n"
+        f"Book plans: {len(plan.book_plans)}\n"
+        f"Total scenes: {total_scenes}\n"
+    )
+
+
 def _load_inventory(layout: Any) -> Any:
     from pipeline.book_structure_planner import SceneInventory
 
@@ -255,6 +355,30 @@ def cmd_init_book(series_id: str, book_number: int, config: dict[str, Any]) -> i
         print(f"ERROR loading spec: {exc}", file=sys.stderr)
         return 1
 
+    if not _check_control_budget(config):
+        return 1
+    if not _request_control_approval(
+        "spec_signoff",
+        {
+            "series_id": series_id,
+            "book_id": book_id,
+            "book_number": book_number,
+            "series_spec_path": str(series_spec_path),
+            "book_spec_path": str(book_spec_path),
+        },
+        config,
+    ):
+        return 1
+
+    roma_plan = _verify_roma_plan(
+        series_id=series_id,
+        book_id=book_id,
+        series_spec=series_spec,
+        book_spec=book_spec,
+    )
+    if roma_plan is None:
+        return 1
+
     planner = BookStructurePlanner()
     inventory = planner.plan(
         book_id=book_id,
@@ -264,6 +388,19 @@ def cmd_init_book(series_id: str, book_number: int, config: dict[str, Any]) -> i
         book_dir=layout.book_dir(),
         inventory_path=layout.scene_inventory_path(),
     )
+    _record_control_cost(config, cost_key="init_book_cost_usd", token_key="init_book_tokens_used")
+    _post_control_activity(
+        (
+            f"Initialized book {book_id} for series {series_id}: "
+            f"{inventory.total_scenes} scenes planned."
+        ),
+        metadata={"series_id": series_id, "book_id": book_id, "command": "init-book"},
+        room=book_id,
+    )
+    _update_control_wiki(
+        f"planning/{series_id}/{book_id}",
+        _roma_plan_markdown(roma_plan, series_id, book_id),
+    )
     print(f"Initialized book '{book_id}': {inventory.total_scenes} scenes planned.")
     print(f"Scene inventory: {layout.scene_inventory_path()}")
     return 0
@@ -271,6 +408,10 @@ def cmd_init_book(series_id: str, book_number: int, config: dict[str, Any]) -> i
 
 def cmd_job(scene_id: str, series_id: str, book_id: str, config: dict[str, Any]) -> int:
     from pipeline.spec_loader import SeriesSpecLoader
+
+    agent_role = str(config.get("job_agent_role", "orchestrator"))
+    if not _check_control_budget(config, agent_role=agent_role):
+        return 1
 
     layout = _get_layout(config, series_id, book_id)
     loader = SeriesSpecLoader(workspace_root=Path("."), schema_path=_schema_path(config))
@@ -302,6 +443,20 @@ def cmd_job(scene_id: str, series_id: str, book_id: str, config: dict[str, Any])
         return 1
 
     _record_scene_result(layout, slot, result)
+    _record_control_cost(
+        config, agent_role=agent_role, cost_key="job_cost_usd", token_key="job_tokens_used"
+    )
+    _post_control_activity(
+        f"Scene {scene_id} finished with decision={result.convergence_decision}.",
+        metadata={
+            "series_id": series_id,
+            "book_id": book_id,
+            "scene_id": scene_id,
+            "decision": result.convergence_decision,
+            "force_resolved": result.force_resolved,
+        },
+        room=book_id,
+    )
     print(
         f"FINAL: scene '{scene_id}' decision={result.convergence_decision} "
         f"force_resolved={result.force_resolved}"
@@ -404,10 +559,20 @@ def cmd_verify_book(book_id: str, series_id: str, config: dict[str, Any]) -> int
 
 def cmd_book_publish(book_id: str, series_id: str, config: dict[str, Any]) -> int:
     """Verify then assemble output bundle: manuscript.md + generation_report.json."""
+    if not _check_control_budget(config):
+        return 1
+
     rc = cmd_verify_book(book_id=book_id, series_id=series_id, config=config)
     if rc != 0:
         print("ERROR: --book-publish aborted; fix verify-book failures first.", file=sys.stderr)
         return rc
+
+    if not _request_control_approval(
+        "manuscript_signoff",
+        {"series_id": series_id, "book_id": book_id},
+        config,
+    ):
+        return 1
 
     layout = _get_layout(config, series_id, book_id)
     out_dir = Path(str(config.get("output_dir", "output"))) / book_id
@@ -425,6 +590,12 @@ def cmd_book_publish(book_id: str, series_id: str, config: dict[str, Any]) -> in
     report_path.write_text(
         json.dumps({"book_id": book_id, "series_id": series_id, "status": "published"}, indent=2),
         encoding="utf-8",
+    )
+    _record_control_cost(config, cost_key="publish_cost_usd", token_key="publish_tokens_used")
+    _post_control_activity(
+        f"Published book {book_id} for series {series_id}.",
+        metadata={"series_id": series_id, "book_id": book_id, "command": "book-publish"},
+        room=book_id,
     )
     print(f"Published generation report → {report_path}")
     return 0
