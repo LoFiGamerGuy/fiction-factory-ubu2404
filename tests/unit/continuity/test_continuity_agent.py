@@ -116,6 +116,83 @@ def test_flags_bible_contradiction(tmp_path: Path) -> None:
     )
 
     assert result.bible_contradiction is True
+    assert agent.ctx.ledger_manager.bible.summary()["unresolved_contradictions"] == 1
+
+
+def test_validation_does_not_commit_valid_bible_delta(tmp_path: Path) -> None:
+    agent = _make_agent(tmp_path)
+
+    result = agent.run(
+        _make_job(
+            bible_deltas=[
+                {
+                    "delta_id": "d001",
+                    "entity_id": "char_beth",
+                    "entity_type": "character",
+                    "operation": "upsert",
+                    "new_attributes": {"role": "ally"},
+                }
+            ]
+        )
+    )
+
+    assert result.bible_contradiction is False
+    assert agent._steward.query("char_beth", "book1") is None
+    assert agent.ctx.ledger_manager.bible.summary()["total_deltas"] == 0
+
+
+def test_commit_approved_changes_commits_bible_delta_and_records_event(tmp_path: Path) -> None:
+    agent = _make_agent(tmp_path)
+    job = _make_job(
+        bible_deltas=[
+            {
+                "delta_id": "d001",
+                "entity_id": "char_beth",
+                "entity_type": "character",
+                "operation": "upsert",
+                "new_attributes": {"role": "ally"},
+            }
+        ]
+    )
+
+    agent.commit_approved_changes(job)
+
+    entity = agent._steward.query("char_beth", "book1")
+    assert entity is not None
+    assert entity.attributes["role"] == "ally"
+    events = agent.ctx.ledger_manager.bible._all_payloads()
+    assert events[-1]["operation"] == "commit_delta"
+
+
+def test_flags_bible_contradiction_from_agent_scoped_deltas(tmp_path: Path) -> None:
+    agent = _make_agent(tmp_path)
+    steward = agent._steward
+    existing = BibleDelta(
+        delta_id="d001",
+        entity_id="char_alice",
+        entity_type="character",
+        operation="upsert",
+        new_attributes={"role": "protagonist"},
+    )
+    steward.commit_delta(steward.propose_delta(existing), book_id="book1")
+
+    result = agent.run(
+        _make_job(
+            editor_agent={
+                "bible_deltas": [
+                    {
+                        "delta_id": "d002",
+                        "entity_id": "char_alice",
+                        "entity_type": "location",
+                        "operation": "upsert",
+                        "new_attributes": {"name": "Thornfield"},
+                    }
+                ]
+            }
+        )
+    )
+
+    assert result.bible_contradiction is True
 
 
 def test_populates_overdue_promises(tmp_path: Path) -> None:

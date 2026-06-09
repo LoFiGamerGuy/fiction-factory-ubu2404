@@ -4,10 +4,11 @@ Decision hierarchy (evaluated in order):
   1. Sensitivity violation          → RE_PLAN  (hard-coded; never FORCE_RESOLVE)
   2. Bible contradiction            → RE_PLAN  (Phase 9)
   3. Overdue promises + room left   → REVISE   (Phase 9)
-  4. needs_review + under revision limit → REVISE
-  5. needs_review + at revision limit    → RE_PLAN
-  6. Budget exhausted               → FORCE_RESOLVE + mandatory log
-  7. All gates passed               → GO
+  4. Overdue promises + exhausted   → RE_PLAN  (Phase 9)
+  5. needs_review + under revision limit → REVISE
+  6. needs_review + at revision limit    → RE_PLAN
+  7. Budget exhausted               → FORCE_RESOLVE + mandatory log
+  8. All gates passed               → GO
 
 Never returns a halt/wait. Always terminates.
 """
@@ -17,7 +18,7 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +28,7 @@ from pipeline.core.job_context import JobContext
 logger = logging.getLogger(__name__)
 
 
-class ConvergenceDecision(str, Enum):
+class ConvergenceDecision(StrEnum):
     GO = "GO"
     REVISE = "REVISE"
     RE_PLAN = "RE_PLAN"
@@ -94,7 +95,19 @@ class ConvergenceController:
             self._save_persistent_memory(decision, job_context, revise_count, "overdue_promises")
             return decision
 
-        # 4. Quality needs review + under limit → REVISE
+        # 4. Overdue promises after retry budget → RE_PLAN (Phase 9)
+        if job_context.overdue_promises:
+            logger.warning(
+                "ConvergenceController: overdue promises exhausted revisions → RE_PLAN (scene=%s)",
+                job_context.scene_id,
+            )
+            decision = ConvergenceDecision.RE_PLAN
+            self._save_persistent_memory(
+                decision, job_context, revise_count, "overdue_promises_exhausted"
+            )
+            return decision
+
+        # 5. Quality needs review + under limit → REVISE
         if quality_result.needs_review and revise_count < self._max_revisions:
             logger.info(
                 "ConvergenceController: quality gate → REVISE (scene=%s, attempt=%d/%d)",
@@ -108,7 +121,7 @@ class ConvergenceController:
             )
             return decision
 
-        # 5. Quality still needs review at limit → RE_PLAN
+        # 6. Quality still needs review at limit → RE_PLAN
         if quality_result.needs_review and revise_count >= self._max_revisions:
             logger.warning(
                 "ConvergenceController: max revisions exhausted → RE_PLAN (scene=%s)",
@@ -118,14 +131,14 @@ class ConvergenceController:
             self._save_persistent_memory(decision, job_context, revise_count, "revisions_exhausted")
             return decision
 
-        # 6. Budget exhausted → FORCE_RESOLVE + mandatory log
+        # 7. Budget exhausted → FORCE_RESOLVE + mandatory log
         if self._is_budget_exhausted(job_context):
             self._log_force_resolve(job_context, reason="word_count_budget_exhausted")
             decision = ConvergenceDecision.FORCE_RESOLVE
             self._save_persistent_memory(decision, job_context, revise_count, "budget_exhausted")
             return decision
 
-        # 7. All good → GO
+        # 8. All good → GO
         decision = ConvergenceDecision.GO
         self._save_persistent_memory(decision, job_context, revise_count, "passed")
         return decision

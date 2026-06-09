@@ -11,6 +11,10 @@ from typing import Any
 
 from pipeline.agents.quality_agent import QualityAgent
 from pipeline.agents.writer_agent import WriterAgent
+from pipeline.continuity.bible_steward import BibleSteward
+from pipeline.continuity.continuity_agent import ContinuityAgent
+from pipeline.continuity.loop_tracker import LoopTracker
+from pipeline.continuity.series_arc_tracker import SeriesArcTracker
 from pipeline.convergence_controller import ConvergenceController
 from pipeline.core.agent_context import AgentContext
 from pipeline.core.job_context import JobContext
@@ -52,6 +56,15 @@ class JobRunner:
         self._writer = WriterAgent(ctx=agent_ctx, model_router=model_router)
         self._editor = EditorAgent(ctx=agent_ctx, model_router=model_router)
         self._quality = QualityAgent(ctx=agent_ctx)
+        self._continuity = ContinuityAgent(
+            ctx=agent_ctx,
+            bible_steward=BibleSteward(agent_ctx.project_layout.bible_state_dir()),
+            loop_tracker=LoopTracker(
+                promise_ledger=agent_ctx.ledger_manager.promise,
+                series_promise_ledger=agent_ctx.ledger_manager.series_promise,
+            ),
+        )
+        self._series_arc_tracker = SeriesArcTracker(agent_ctx.ledger_manager.series_promise)
         self._controller = ConvergenceController(max_revisions=max_revisions)
 
     def run_scene(self, job_context: JobContext) -> SceneRunResult:
@@ -59,11 +72,13 @@ class JobRunner:
         agents: dict[str, Any] = {
             "writer_agent": self._writer,
             "editor_agent": self._editor,
+            "continuity_agent": self._continuity,
+            "series_arc_tracker": self._series_arc_tracker,
             "quality_agent": self._quality,
         }
 
         def _make_job_context(state: SceneState) -> JobContext:
-            merged_output: dict[str, Any] = {}
+            merged_output: dict[str, Any] = dict(job_context.output_data)
             if state.get("writer_output"):
                 merged_output["writer_agent"] = state["writer_output"]
             if state.get("editor_output"):
@@ -148,6 +163,8 @@ class JobRunner:
         agents: dict[str, Any] = {
             "writer_agent": self._writer,
             "editor_agent": self._editor,
+            "continuity_agent": self._continuity,
+            "series_arc_tracker": self._series_arc_tracker,
             "quality_agent": self._quality,
         }
 

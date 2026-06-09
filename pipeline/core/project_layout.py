@@ -43,6 +43,9 @@ class ProjectLayout:
     def book_spec_path(self) -> Path:
         return self.book_dir() / "spec.yaml"
 
+    def bible_state_dir(self) -> Path:
+        return self.book_dir() / "bible"
+
     def scene_history_path(self) -> Path:
         return self.book_dir() / "scene_history.jsonl"
 

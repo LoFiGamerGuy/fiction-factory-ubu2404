@@ -9,6 +9,8 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
+import uuid
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from pipeline.continuity.bible_steward import BibleSteward
@@ -16,6 +18,7 @@ from pipeline.continuity.bible_types import BibleDelta, BibleState
 from pipeline.continuity.loop_tracker import LoopTracker
 from pipeline.core.base_agent import BaseAgent
 from pipeline.core.job_context import JobContext
+from pipeline.ledgers.bible_tracker import ContinuityEvent
 
 if TYPE_CHECKING:
     from pipeline.core.agent_context import AgentContext
@@ -56,20 +59,12 @@ class ContinuityAgent(BaseAgent):
         overdue: list[str] = []
 
         # 1. Validate proposed bible deltas (if any)
-        pending_deltas: list[dict[str, Any]] = job_context.output_data.get("bible_deltas", [])
+        pending_deltas = _extract_bible_deltas(job_context.output_data)
         if pending_deltas:
             current_bible: BibleState = self._steward._load_state(job_context.book_id)
             for raw in pending_deltas:
                 try:
-                    delta = BibleDelta(
-                        delta_id=str(raw.get("delta_id", "")),
-                        entity_id=str(raw.get("entity_id", "")),
-                        entity_type=str(raw.get("entity_type", "character")),
-                        operation=str(raw.get("operation", "upsert")),
-                        new_attributes=raw.get("new_attributes", {}),
-                        timeline_event=raw.get("timeline_event"),
-                        source_scene_id=job_context.scene_id,
-                    )
+                    delta = _delta_from_raw(raw, job_context.scene_id)
                     proposed = self._steward.propose_delta(delta)
                     validation = self._steward.validate_delta(proposed, current_bible)
                     if not validation.valid:
@@ -79,10 +74,18 @@ class ContinuityAgent(BaseAgent):
                             validation.contradiction_type,
                             validation.detail,
                         )
+                        self._record_continuity_event(
+                            job_context=job_context,
+                            delta=delta,
+                            operation="contradiction_detected",
+                            description=validation.detail,
+                            contradiction_type=validation.contradiction_type,
+                        )
                         bible_contradiction = True
                         break
                 except Exception as exc:
                     logger.error("ContinuityAgent: delta validation error: %s", exc)
+                    self._record_raw_contradiction_event(job_context, raw, str(exc))
                     bible_contradiction = True
                     break
 
@@ -109,6 +112,86 @@ class ContinuityAgent(BaseAgent):
             overdue_promises=overdue,
         )
         return result
+
+    def commit_approved_changes(self, job_context: JobContext) -> None:
+        """Commit valid bible deltas after convergence has approved the scene."""
+        pending_deltas = _extract_bible_deltas(job_context.output_data)
+        if not pending_deltas:
+            return
+
+        current_bible: BibleState = self._steward._load_state(job_context.book_id)
+        for raw in pending_deltas:
+            delta = _delta_from_raw(raw, job_context.scene_id)
+            proposed = self._steward.propose_delta(delta)
+            validation = self._steward.validate_delta(proposed, current_bible)
+            if not validation.valid:
+                self._record_continuity_event(
+                    job_context=job_context,
+                    delta=delta,
+                    operation="contradiction_detected",
+                    description=validation.detail,
+                    contradiction_type=validation.contradiction_type,
+                )
+                raise RuntimeError(
+                    f"Approved scene '{job_context.scene_id}' has invalid bible delta "
+                    f"'{delta.delta_id}': {validation.detail}"
+                )
+
+            self._steward.commit_delta(proposed, job_context.book_id)
+            self._record_continuity_event(
+                job_context=job_context,
+                delta=delta,
+                operation="commit_delta",
+                description=f"Committed {delta.operation} for {delta.entity_id}",
+                resolved=True,
+            )
+            current_bible = self._steward._load_state(job_context.book_id)
+
+    def _record_continuity_event(
+        self,
+        *,
+        job_context: JobContext,
+        delta: BibleDelta,
+        operation: str,
+        description: str,
+        contradiction_type: str | None = None,
+        resolved: bool = False,
+    ) -> None:
+        event = ContinuityEvent(
+            event_id=str(uuid.uuid4())[:8],
+            book_id=job_context.book_id,
+            scene_id=job_context.scene_id,
+            timestamp=datetime.now(UTC).isoformat(),
+            fact_type=delta.entity_type,
+            entity_id=delta.entity_id,
+            operation=operation,
+            description=description,
+            contradiction_type=contradiction_type,
+            resolved=resolved,
+        )
+        self.ctx.ledger_manager.bible.append(event)
+
+    def _record_raw_contradiction_event(
+        self,
+        job_context: JobContext,
+        raw: dict[str, Any],
+        description: str,
+    ) -> None:
+        delta = BibleDelta(
+            delta_id=str(raw.get("delta_id", "")),
+            entity_id=str(raw.get("entity_id", "")),
+            entity_type=str(raw.get("entity_type", "unknown")),
+            operation=str(raw.get("operation", "unknown")),
+            new_attributes={},
+            source_scene_id=job_context.scene_id,
+        )
+        self._record_continuity_event(
+            job_context=job_context,
+            delta=delta,
+            operation="contradiction_detected",
+            description=description,
+            contradiction_type="validation_error",
+        )
 
     # ── Persistent Memory (Claude Managed Agents / Dreaming) ──────────────
 
@@ -173,3 +256,31 @@ class ContinuityAgent(BaseAgent):
             logger.debug("ContinuityAgent: saved memory (%d scenes)", existing["scenes_checked"])
         except Exception as exc:
             logger.warning("ContinuityAgent: failed to save memory: %s", exc)
+
+
+def _extract_bible_deltas(output_data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Collect bible deltas from top-level or agent-scoped outputs."""
+    deltas: list[dict[str, Any]] = []
+    raw_top_level = output_data.get("bible_deltas", [])
+    if isinstance(raw_top_level, list):
+        deltas.extend([d for d in raw_top_level if isinstance(d, dict)])
+
+    for agent_output in output_data.values():
+        if not isinstance(agent_output, dict):
+            continue
+        raw_nested = agent_output.get("bible_deltas", [])
+        if isinstance(raw_nested, list):
+            deltas.extend([d for d in raw_nested if isinstance(d, dict)])
+    return deltas
+
+
+def _delta_from_raw(raw: dict[str, Any], scene_id: str) -> BibleDelta:
+    return BibleDelta(
+        delta_id=str(raw.get("delta_id", "")),
+        entity_id=str(raw.get("entity_id", "")),
+        entity_type=str(raw.get("entity_type", "character")),
+        operation=str(raw.get("operation", "upsert")),
+        new_attributes=raw.get("new_attributes", {}),
+        timeline_event=raw.get("timeline_event"),
+        source_scene_id=scene_id,
+    )

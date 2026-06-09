@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 from unittest.mock import MagicMock
+
+import pytest
 
 from pipeline.agents.agent_models import EditorOutput, QualityResult, WriterOutput
 from pipeline.convergence_controller import ConvergenceController
@@ -231,8 +234,133 @@ class TestSceneStateMachineTransitions:
         machine.run(_make_initial_state())
         quality_mock.update_ledgers.assert_called_once()
 
-    def test_all_six_nodes_in_graph(self) -> None:
-        """Graph must contain writer, editor, quality, convergence, force_resolve, final."""
+    def test_approved_go_commits_continuity_changes(self) -> None:
+        """Approved scenes should call approval-time continuity persistence."""
+        continuity_mock = MagicMock()
+        continuity_mock.run.side_effect = lambda jc: jc
+        series_arc_tracker = MagicMock()
+
+        agents: dict[str, Any] = {
+            "writer_agent": _make_mock_writer(),
+            "editor_agent": _make_mock_editor(),
+            "continuity_agent": continuity_mock,
+            "series_arc_tracker": series_arc_tracker,
+            "quality_agent": _make_mock_quality(needs_review=False),
+        }
+        machine = SceneStateMachine(
+            agents=agents,
+            job_context_factory=_job_context_factory,
+            controller=ConvergenceController(max_revisions=1),
+        )
+
+        result = machine.run(_make_initial_state())
+
+        assert result["convergence_decision"] == "GO"
+        continuity_mock.commit_approved_changes.assert_called_once()
+        series_arc_tracker.apply_approved_updates.assert_called_once()
+
+    def test_force_resolve_does_not_commit_continuity_changes(self) -> None:
+        """RE_PLAN/FORCE_RESOLVE paths must not mutate bible or series state."""
+        continuity_mock = MagicMock()
+        continuity_mock.run.side_effect = lambda jc: dataclasses.replace(
+            jc,
+            bible_contradiction=True,
+        )
+        series_arc_tracker = MagicMock()
+
+        agents: dict[str, Any] = {
+            "writer_agent": _make_mock_writer(),
+            "editor_agent": _make_mock_editor(),
+            "continuity_agent": continuity_mock,
+            "series_arc_tracker": series_arc_tracker,
+            "quality_agent": _make_mock_quality(needs_review=False),
+        }
+        machine = SceneStateMachine(
+            agents=agents,
+            job_context_factory=_job_context_factory,
+            controller=ConvergenceController(max_revisions=1),
+        )
+
+        result = machine.run(_make_initial_state())
+
+        assert result["convergence_decision"] == "RE_PLAN"
+        continuity_mock.commit_approved_changes.assert_not_called()
+        series_arc_tracker.apply_approved_updates.assert_not_called()
+
+    def test_series_arc_update_failure_is_fatal_in_final_node(self) -> None:
+        """Series arc persistence failure should fail the scene run."""
+        continuity_mock = MagicMock()
+        continuity_mock.run.side_effect = lambda jc: jc
+        series_arc_tracker = MagicMock()
+        series_arc_tracker.apply_approved_updates.side_effect = RuntimeError("series failed")
+
+        agents: dict[str, Any] = {
+            "writer_agent": _make_mock_writer(),
+            "editor_agent": _make_mock_editor(),
+            "continuity_agent": continuity_mock,
+            "series_arc_tracker": series_arc_tracker,
+            "quality_agent": _make_mock_quality(needs_review=False),
+        }
+        machine = SceneStateMachine(
+            agents=agents,
+            job_context_factory=_job_context_factory,
+            controller=ConvergenceController(max_revisions=1),
+        )
+
+        with pytest.raises(RuntimeError, match="series failed"):
+            machine.run(_make_initial_state())
+
+    def test_continuity_bible_contradiction_routes_to_re_plan(self) -> None:
+        """ContinuityAgent signal should reach convergence as a RE_PLAN."""
+        continuity_mock = MagicMock()
+        continuity_mock.run.side_effect = lambda jc: dataclasses.replace(
+            jc,
+            bible_contradiction=True,
+        )
+
+        agents: dict[str, Any] = {
+            "writer_agent": _make_mock_writer(),
+            "editor_agent": _make_mock_editor(),
+            "continuity_agent": continuity_mock,
+            "quality_agent": _make_mock_quality(needs_review=False),
+        }
+        machine = SceneStateMachine(
+            agents=agents,
+            job_context_factory=_job_context_factory,
+            controller=ConvergenceController(max_revisions=1),
+        )
+        result = machine.run(_make_initial_state())
+
+        assert result["bible_contradiction"] is True
+        assert result["convergence_decision"] == "RE_PLAN"
+
+    def test_continuity_overdue_promises_revise_then_re_plan(self) -> None:
+        """Overdue promises get one revision attempt, then route to RE_PLAN."""
+        continuity_mock = MagicMock()
+        continuity_mock.run.side_effect = lambda jc: dataclasses.replace(
+            jc,
+            overdue_promises=["p001"],
+        )
+
+        agents: dict[str, Any] = {
+            "writer_agent": _make_mock_writer(),
+            "editor_agent": _make_mock_editor(),
+            "continuity_agent": continuity_mock,
+            "quality_agent": _make_mock_quality(needs_review=False),
+        }
+        machine = SceneStateMachine(
+            agents=agents,
+            job_context_factory=_job_context_factory,
+            controller=ConvergenceController(max_revisions=1),
+        )
+        result = machine.run(_make_initial_state())
+
+        assert result["overdue_promises"] == ["p001"]
+        assert result["revise_count"] == 1
+        assert result["convergence_decision"] == "RE_PLAN"
+
+    def test_all_scene_loop_nodes_in_graph(self) -> None:
+        """Graph must contain all scene loop nodes."""
         agents: dict[str, Any] = {
             "writer_agent": _make_mock_writer(),
             "editor_agent": _make_mock_editor(),
@@ -245,6 +373,7 @@ class TestSceneStateMachineTransitions:
         node_names = set(machine._graph.nodes)
         assert "writer_node" in node_names
         assert "editor_node" in node_names
+        assert "continuity_node" in node_names
         assert "quality_node" in node_names
         assert "force_resolve_node" in node_names
         assert "final_node" in node_names

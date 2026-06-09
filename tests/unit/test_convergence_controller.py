@@ -116,3 +116,19 @@ class TestConvergenceControllerBibleContradiction:
             bible_contradiction=True,
         )
         assert ctrl.decide(qr, jc) == ConvergenceDecision.RE_PLAN
+
+
+class TestConvergenceControllerOverduePromises:
+    def test_overdue_promises_revise_under_limit(self) -> None:
+        ctrl = ConvergenceController(max_revisions=2)
+        qr = QualityResult(needs_review=False, tier="pass")
+        jc = _make_jc(overdue_promises=["p001"])
+
+        assert ctrl.decide(qr, jc, revise_count=0) == ConvergenceDecision.REVISE
+
+    def test_overdue_promises_re_plan_when_revisions_exhausted(self) -> None:
+        ctrl = ConvergenceController(max_revisions=2)
+        qr = QualityResult(needs_review=False, tier="pass")
+        jc = _make_jc(overdue_promises=["p001"])
+
+        assert ctrl.decide(qr, jc, revise_count=2) == ConvergenceDecision.RE_PLAN

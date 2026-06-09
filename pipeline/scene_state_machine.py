@@ -166,10 +166,28 @@ def make_final_node(agents: AgentRegistry, job_context_factory: Any) -> Any:
     def final_node(state: SceneState) -> _NodeResult:
         editor_data = state.get("editor_output", {})
         text = editor_data.get("edited_text", "") or state.get("final_text", "")
+        approved = state.get("convergence_decision") == ConvergenceDecision.GO and not state.get(
+            "force_resolved", False
+        )
+        jc: JobContext | None = None
+
+        if approved:
+            jc = job_context_factory(state)
+            continuity_agent = agents.get("continuity_agent")
+            if continuity_agent is not None and hasattr(
+                continuity_agent, "commit_approved_changes"
+            ):
+                continuity_agent.commit_approved_changes(jc)
+
+            series_arc_tracker = agents.get("series_arc_tracker")
+            if series_arc_tracker is not None:
+                series_arc_tracker.apply_approved_updates(jc)
+
         # Update ledgers if quality_agent is available
         quality_agent = agents.get("quality_agent")
         if quality_agent is not None and not state.get("force_resolved", False):
-            jc: JobContext = job_context_factory(state)
+            if jc is None:
+                jc = job_context_factory(state)
             try:
                 quality_agent.update_ledgers(jc)
             except Exception as exc:
