@@ -252,6 +252,14 @@ Items explicitly deferred to V2. Do not implement in V1.
 
 ## Section 4: Task 011–015 Decisions
 
+### T011-004 — WUPHF Local Git Wiki Mirror
+**Date:** 2026-06-09
+**Statement:** `WUPHFClient` supports a local git-backed wiki mirror via `WUPHF_WIKI_ROOT`. When configured, wiki updates write markdown files under that root; optional `WUPHF_WIKI_AUTO_COMMIT=true` makes a best-effort git commit. `BibleSteward.commit_delta()` syncs committed bible entities to the WUPHF `series-bible` wiki on a best-effort, non-blocking path.
+**Rationale:** V1 is local-dev only. Phase 11 needs WUPHF wiki sync behavior without requiring a hosted service in tests or normal local runs. The atomic local bible commit remains authoritative; WUPHF sync must not block or corrupt scene execution.
+**Supersedes:** Nothing — fills the Phase 11 WUPHF git-backed wiki acceptance path.
+
+---
+
 ### T011-001 — Approval Gate Timeout
 **Date:** 2026-05-18
 **Statement:** Paperclip approval gate timeout set to 3600 seconds (1 hour default). Pipeline halts with error if timeout expires without human approval.

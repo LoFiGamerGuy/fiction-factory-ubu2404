@@ -9,8 +9,10 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -38,11 +40,20 @@ class ActivityEvent:
 class WUPHFClient:
     """Thin wrapper around the WUPHF channel-messaging and wiki REST API."""
 
-    def __init__(self) -> None:
+    def __init__(self, wiki_root: str | Path | None = None) -> None:
         self._api_url: str = os.environ.get("WUPHF_API_URL", "").rstrip("/")
         self._api_key: str = os.environ.get("WUPHF_API_KEY", "")
+        env_wiki_root = os.environ.get("WUPHF_WIKI_ROOT", "")
+        self._wiki_root: Path | None = (
+            Path(wiki_root or env_wiki_root) if wiki_root or env_wiki_root else None
+        )
+        self._auto_commit: bool = os.environ.get("WUPHF_WIKI_AUTO_COMMIT", "").lower() in {
+            "1",
+            "true",
+            "yes",
+        }
         self._configured: bool = bool(self._api_url and self._api_key)
-        if not self._configured:
+        if not self._configured and self._wiki_root is None:
             logger.warning(
                 "WUPHFClient: WUPHF_API_URL or WUPHF_API_KEY not set; "
                 "operating in graceful-degradation mode (all calls are no-ops)."
@@ -52,6 +63,86 @@ class WUPHFClient:
 
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self._api_key}", "Content-Type": "application/json"}
+
+    def _local_page_path(self, page: str) -> Path:
+        if self._wiki_root is None:
+            raise ValueError("WUPHF local wiki root is not configured")
+        page_path = Path(page)
+        if page_path.is_absolute() or ".." in page_path.parts:
+            raise ValueError(f"WUPHF wiki page must be a relative slug: {page!r}")
+        if not page_path.suffix:
+            page_path = page_path.with_suffix(".md")
+        return self._wiki_root / page_path
+
+    def _write_local_wiki(self, page: str, content: str) -> None:
+        path = self._local_page_path(page)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        if self._auto_commit:
+            self._commit_local_wiki(path)
+
+    def _read_local_wiki(self, page: str) -> str | None:
+        path = self._local_page_path(page)
+        if not path.exists():
+            return None
+        return path.read_text(encoding="utf-8")
+
+    def _commit_local_wiki(self, path: Path) -> None:
+        if self._wiki_root is None:
+            return
+        git_check = subprocess.run(
+            ["git", "-C", str(self._wiki_root), "rev-parse", "--is-inside-work-tree"],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if git_check.returncode != 0:
+            return
+
+        rel_path = path.relative_to(self._wiki_root).as_posix()
+        add_result = subprocess.run(
+            ["git", "-C", str(self._wiki_root), "add", "--", rel_path],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if add_result.returncode != 0:
+            logger.warning("WUPHFClient: local wiki git add failed: %s", add_result.stderr.strip())
+            return
+
+        diff_result = subprocess.run(
+            ["git", "-C", str(self._wiki_root), "diff", "--cached", "--quiet", "--", rel_path],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if diff_result.returncode == 0:
+            return
+
+        commit_result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(self._wiki_root),
+                "commit",
+                "-m",
+                f"Update WUPHF wiki page {rel_path}",
+                "--",
+                rel_path,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if commit_result.returncode != 0:
+            logger.warning(
+                "WUPHFClient: local wiki git commit failed: %s",
+                commit_result.stderr.strip(),
+            )
 
     # ── public API ──────────────────────────────────────────────────────────────
 
@@ -90,6 +181,8 @@ class WUPHFClient:
         author: str = "pipeline",
     ) -> None:
         """PUT /wiki/{page} to create or update a wiki page."""
+        if self._wiki_root is not None:
+            self._write_local_wiki(page, content)
         if not self._configured:
             return
         payload: dict[str, Any] = {"content": content, "author": author}
@@ -106,6 +199,10 @@ class WUPHFClient:
 
     def read_wiki(self, page: str) -> str:
         """GET /wiki/{page}; returns empty string if the page is not found or on error."""
+        if self._wiki_root is not None:
+            local_content = self._read_local_wiki(page)
+            if local_content is not None:
+                return local_content
         if not self._configured:
             return ""
         try:

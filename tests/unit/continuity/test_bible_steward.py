@@ -145,6 +145,46 @@ class TestCommitDeltaAtomic:
         assert entity.entity_id == "char_alice"
         assert entity.attributes["current_location"] == "Thornfield"
 
+    def test_commit_syncs_character_card_to_wuphf(self, tmp_path: Path) -> None:
+        calls: list[dict[str, str]] = []
+
+        class FakeWUPHF:
+            def update_wiki(self, page: str, content: str, author: str = "pipeline") -> None:
+                calls.append({"page": page, "content": content, "author": author})
+
+        steward = BibleSteward(
+            tmp_path / "bible",
+            wuphf_client=FakeWUPHF(),
+            series_id="series1",
+        )
+        delta = _make_delta(
+            entity_id="char_alice",
+            entity_type="character",
+            new_attributes={"current_location": "Thornfield"},
+            source_scene_id="ch01_sc01",
+        )
+
+        steward.commit_delta(steward.propose_delta(delta), book_id="book1")
+
+        assert calls == [
+            {
+                "page": "series-bible/series1/characters/char_alice",
+                "content": (
+                    "# char_alice\n\n"
+                    "Entity type: `character`\n\n"
+                    "Book: `book1`\n\n"
+                    "Source scene: `ch01_sc01`\n\n"
+                    "Operation: `upsert`\n\n"
+                    "Status: `active`\n\n"
+                    "## Attributes\n\n"
+                    "```json\n"
+                    '{\n  "current_location": "Thornfield"\n}\n'
+                    "```\n"
+                ),
+                "author": "bible_steward",
+            }
+        ]
+
 
 class TestHashChain:
     def test_hash_changes_across_commits(self, tmp_path: Path) -> None:

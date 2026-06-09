@@ -6,6 +6,8 @@ are made.  Tests run without any real Paperclip / WUPHF / ROMA instances.
 
 from __future__ import annotations
 
+import subprocess
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -208,6 +210,45 @@ class TestWUPHFPostChannelMocked:
                     "Content-Type": "application/json",
                 },
             )
+
+
+class TestWUPHFLocalGitWiki:
+    """Local WUPHF wiki mirror writes markdown files into a git-backed wiki tree."""
+
+    def test_wuphf_update_wiki_local_git_root(self, tmp_path: Path) -> None:
+        from pipeline.control.wuphf_client import WUPHFClient
+
+        wiki_root = tmp_path / "wiki"
+        wiki_root.mkdir()
+        subprocess.run(
+            ["git", "init"],
+            cwd=wiki_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+        client = WUPHFClient(wiki_root=wiki_root)
+        client.update_wiki(
+            "series-bible/characters/char_alice",
+            "# char_alice\n\nEntity type: `character`\n",
+            author="pipeline",
+        )
+
+        page_path = wiki_root / "series-bible" / "characters" / "char_alice.md"
+        assert page_path.exists()
+        assert client.read_wiki("series-bible/characters/char_alice") == page_path.read_text(
+            encoding="utf-8"
+        )
+
+        status = subprocess.run(
+            ["git", "status", "--short", "--untracked-files=all"],
+            cwd=wiki_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        assert "series-bible/characters/char_alice.md" in status.stdout
 
 
 # ── ROMA tests ────────────────────────────────────────────────────────────────

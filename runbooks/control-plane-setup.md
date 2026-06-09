@@ -19,15 +19,18 @@ PAPERCLIP_API_KEY=pk_live_XXXXXXXXXXXXXXXXXXXX
 # ── WUPHF ─────────────────────────────────────────────────────────────────────
 WUPHF_API_URL=https://your-wuphf-instance/api/v1
 WUPHF_API_KEY=wk_live_XXXXXXXXXXXXXXXXXXXX
+WUPHF_WIKI_ROOT=.wuphf/local/wiki
+WUPHF_WIKI_AUTO_COMMIT=false
 
 # ── ROMA ──────────────────────────────────────────────────────────────────────
 ROMA_API_URL=https://your-roma-instance/api/v1
 ROMA_API_KEY=rk_live_XXXXXXXXXXXXXXXXXXXX
 ```
 
-All three clients use `python-dotenv` (`load_dotenv()`) and fall back to
-graceful-degradation mode when any of these variables is absent — the pipeline
-continues without external tracking or approvals.
+All three clients use `python-dotenv` (`load_dotenv()`). Paperclip falls back to
+pass-through budget/approval checks when not configured. WUPHF falls back to
+no-op messaging, or to a local git-backed wiki mirror when `WUPHF_WIKI_ROOT` is
+set. ROMA falls back to the built-in `BookStructurePlanner` when not configured.
 
 ---
 
@@ -55,11 +58,8 @@ The following gate names are used by `PaperclipClient.request_approval()`:
 
 | Gate name             | Triggered by                         |
 |-----------------------|--------------------------------------|
-| `phase_end_0`         | End of Phase 0 (tooling install)     |
-| `synthesis_shape_2_1` | §2.1.6 early synthesis scoping       |
-| `synthesis_shape_2_4` | §2.4 final binding synthesis shape   |
-| `tooling_decisions`   | End of Phase 3 — TOOLING_DECISIONS   |
-| `implementation_plan` | End of Phase 4 — IMPLEMENTATION_PLAN |
+| `spec_signoff`        | `--init-book` before ROMA planning   |
+| `manuscript_signoff`  | `--book-publish` after verification  |
 
 Configure any required approvers in Paperclip's gate settings so notifications
 reach the right people.
@@ -109,6 +109,22 @@ Seed the following wiki pages before the first run:
 
 Pages are created/updated via `WUPHFClient.update_wiki(page, content)`.
 
+For local-only development without a running WUPHF API, set
+`WUPHF_WIKI_ROOT=.wuphf/local/wiki`. The client writes markdown files under that
+directory using the wiki page slug as the path. For example,
+`series-bible/characters/char_alice` writes
+`.wuphf/local/wiki/series-bible/characters/char_alice.md`.
+
+If `WUPHF_WIKI_AUTO_COMMIT=true` and `WUPHF_WIKI_ROOT` is a git repository,
+`WUPHFClient.update_wiki()` makes a best-effort commit for the changed page. If
+git is not initialized or user identity is missing, the markdown write still
+succeeds and the warning is logged.
+
+BibleSteward syncs committed bible deltas to the WUPHF wiki under
+`series-bible/{series_id}/characters/{entity_id}` for character cards and
+`series-bible/{series_id}/world-facts/{entity_type}/{entity_id}` for other facts.
+This sync is best-effort and never blocks the atomic local bible commit.
+
 ### 2.3 Verify WUPHF
 
 ```bash
@@ -121,6 +137,22 @@ content = c.read_wiki("series-bible")
 print("wiki read back:", content[:40])
 EOF
 ```
+
+Local git-backed verification:
+
+```bash
+mkdir -p .wuphf/local/wiki
+git -C .wuphf/local/wiki init
+WUPHF_WIKI_ROOT=.wuphf/local/wiki python - <<'EOF'
+from pipeline.control.wuphf_client import WUPHFClient
+c = WUPHFClient()
+c.update_wiki("series-bible/characters/char_alice", "# Alice\n")
+print(c.read_wiki("series-bible/characters/char_alice"))
+EOF
+git -C .wuphf/local/wiki status --short
+```
+
+Expected status includes `series-bible/characters/char_alice.md`.
 
 ---
 
@@ -195,6 +227,8 @@ Run through this checklist after initial setup:
 - [ ] All five agent-role budgets visible in Paperclip UI
 - [ ] `pipeline` and `drafts` channels exist in WUPHF
 - [ ] `series-bible` wiki page readable via `WUPHFClient.read_wiki()`
+- [ ] Local wiki fallback writes under `WUPHF_WIKI_ROOT` when no WUPHF API is running
+- [ ] `python -m pipeline.orchestrator --validate-spec wiki:series-specs/<series_id>` can validate a spec stored in the WUPHF wiki
 - [ ] `ROMAClient().decompose(spec)` returns a `DecomposedPlan` (ROMA or fallback)
 - [ ] Heartbeat cron/loop running and logging to expected path
 - [ ] Integration tests pass: `pytest tests/integration/test_control_collaboration.py -v`

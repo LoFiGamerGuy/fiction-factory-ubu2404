@@ -1,4 +1,5 @@
 .workspace/
+.wuphf/
 *.pyc
 __pycache__/
 .venv/

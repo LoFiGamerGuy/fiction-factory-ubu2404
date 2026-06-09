@@ -144,6 +144,24 @@ def test_init_book_runs_phase11_control_flow(tmp_path: Path, monkeypatch: Any) -
     assert any(event[0] == "wiki" and event[1] == "planning/series_test/book01" for event in events)
 
 
+def test_validate_spec_can_read_wuphf_wiki_page(tmp_path: Path, monkeypatch: Any) -> None:
+    config_path = _write_config(tmp_path)
+    series_spec_path = _write_specs(tmp_path)
+    spec_text = series_spec_path.read_text(encoding="utf-8")
+
+    class FakeWUPHF:
+        def read_wiki(self, page: str) -> str:
+            assert page == "series-specs/series_test"
+            return spec_text
+
+    monkeypatch.setattr("pipeline.control.wuphf_client.WUPHFClient", FakeWUPHF)
+
+    assert (
+        main(["--validate-spec", "wiki:series-specs/series_test", "--config", str(config_path)])
+        == 0
+    )
+
+
 def test_job_halts_when_paperclip_budget_exhausted(tmp_path: Path, monkeypatch: Any) -> None:
     config_path = _write_config(tmp_path)
 

@@ -15,6 +15,7 @@ from pipeline.continuity.bible_steward import BibleSteward
 from pipeline.continuity.continuity_agent import ContinuityAgent
 from pipeline.continuity.loop_tracker import LoopTracker
 from pipeline.continuity.series_arc_tracker import SeriesArcTracker
+from pipeline.control.wuphf_client import WUPHFClient
 from pipeline.convergence_controller import ConvergenceController
 from pipeline.core.agent_context import AgentContext
 from pipeline.core.job_context import JobContext
@@ -58,7 +59,11 @@ class JobRunner:
         self._quality = QualityAgent(ctx=agent_ctx)
         self._continuity = ContinuityAgent(
             ctx=agent_ctx,
-            bible_steward=BibleSteward(agent_ctx.project_layout.bible_state_dir()),
+            bible_steward=BibleSteward(
+                agent_ctx.project_layout.bible_state_dir(),
+                wuphf_client=WUPHFClient(),
+                series_id=agent_ctx.project_layout.series_root.name,
+            ),
             loop_tracker=LoopTracker(
                 promise_ledger=agent_ctx.ledger_manager.promise,
                 series_promise_ledger=agent_ctx.ledger_manager.series_promise,

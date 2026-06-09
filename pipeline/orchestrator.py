@@ -17,6 +17,7 @@ import argparse
 import json
 import logging
 import sys
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -65,6 +66,16 @@ def _resolve_book_id(config: dict[str, Any], book_id: str | None = None) -> str:
 def _schema_path(config: dict[str, Any]) -> Path | None:
     raw = config.get("schema_path")
     return Path(str(raw)) if raw else None
+
+
+def _wiki_page_ref(spec_ref: str) -> str | None:
+    for prefix in ("wiki:", "wuphf:"):
+        if spec_ref.startswith(prefix):
+            page = spec_ref.removeprefix(prefix)
+            if not page:
+                raise ValueError(f"empty WUPHF wiki page reference: {spec_ref!r}")
+            return page
+    return None
 
 
 def _approval_timeout_s(config: dict[str, Any]) -> int:
@@ -324,7 +335,28 @@ def cmd_validate_spec(spec_path: str, config: dict[str, Any]) -> int:
     from pipeline.spec_validator_agent import SpecValidatorAgent
 
     agent = SpecValidatorAgent(schema_path=_schema_path(config))
-    result = agent.validate(Path(spec_path))
+    wiki_page = _wiki_page_ref(spec_path)
+    if wiki_page is not None:
+        from pipeline.control.wuphf_client import WUPHFClient
+
+        content = WUPHFClient().read_wiki(wiki_page)
+        if not content:
+            print(f"ERROR: WUPHF wiki page not found or empty: {wiki_page}", file=sys.stderr)
+            return 1
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            suffix=".yaml",
+            encoding="utf-8",
+            delete=False,
+        ) as tmp:
+            tmp.write(content)
+            tmp_path = Path(tmp.name)
+        try:
+            result = agent.validate(tmp_path)
+        finally:
+            tmp_path.unlink(missing_ok=True)
+    else:
+        result = agent.validate(Path(spec_path))
     if result.valid:
         print(f"OK: {spec_path} is valid")
         return 0

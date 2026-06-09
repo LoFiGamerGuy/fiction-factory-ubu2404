@@ -38,8 +38,15 @@ _CONTRADICTION_TYPES = frozenset(
 class BibleSteward:
     """Manages the series/book bible with atomic writes and contradiction detection."""
 
-    def __init__(self, bible_dir: Path) -> None:
+    def __init__(
+        self,
+        bible_dir: Path,
+        wuphf_client: Any | None = None,
+        series_id: str | None = None,
+    ) -> None:
         self._dir = bible_dir
+        self._wuphf = wuphf_client
+        self._series_id = series_id
         self._dir.mkdir(parents=True, exist_ok=True)
 
     # ── Paths ─────────────────────────────────────────────────────────────────
@@ -117,6 +124,7 @@ class BibleSteward:
 
         lock_path = bible_path.parent / ".bible.lock"
         lock_path.touch(exist_ok=True)
+        committed_state: BibleState | None = None
 
         with lock_path.open("r") as lock_fh:
             fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX)
@@ -173,9 +181,13 @@ class BibleSteward:
                 snap_path = self._snapshot_dir(book_id) / f"bible_snapshot_{snap_n:04d}.json"
                 snap_path.write_text(bible_json, encoding="utf-8")
 
+                committed_state = state
                 logger.debug("BibleSteward: committed %s hash=%s", delta.proposed_id, new_hash)
             finally:
                 fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
+
+        if committed_state is not None:
+            self._sync_wuphf_wiki(delta, book_id, committed_state)
 
     def query(self, entity_id: str, book_id: str) -> BibleEntity | None:
         """Return an entity from the current bible, or None if not found."""
@@ -220,6 +232,52 @@ class BibleSteward:
             return str(last.get("content_hash", ""))
         except Exception:
             return ""
+
+    def _sync_wuphf_wiki(
+        self,
+        delta: ProposedDelta,
+        book_id: str,
+        state: BibleState,
+    ) -> None:
+        """Best-effort sync of committed bible entities to the WUPHF series-bible wiki."""
+        if self._wuphf is None:
+            return
+        try:
+            page = self._wiki_page_for_delta(delta.original)
+            markdown = self._render_entity_markdown(delta.original, book_id, state)
+            self._wuphf.update_wiki(page, markdown, author="bible_steward")
+        except Exception as exc:
+            logger.warning(
+                "BibleSteward: WUPHF wiki sync failed for %s: %s",
+                delta.original.entity_id,
+                exc,
+            )
+
+    def _wiki_page_for_delta(self, delta: BibleDelta) -> str:
+        prefix = "series-bible"
+        if self._series_id:
+            prefix = f"{prefix}/{self._series_id}"
+        if delta.entity_type == "character":
+            return f"{prefix}/characters/{delta.entity_id}"
+        return f"{prefix}/world-facts/{delta.entity_type}/{delta.entity_id}"
+
+    @staticmethod
+    def _render_entity_markdown(delta: BibleDelta, book_id: str, state: BibleState) -> str:
+        entity = state.entity(delta.entity_id)
+        attributes = entity.attributes if entity is not None else delta.new_attributes
+        status = "deleted" if delta.operation == "delete" else "active"
+        return (
+            f"# {delta.entity_id}\n\n"
+            f"Entity type: `{delta.entity_type}`\n\n"
+            f"Book: `{book_id}`\n\n"
+            f"Source scene: `{delta.source_scene_id or 'unknown'}`\n\n"
+            f"Operation: `{delta.operation}`\n\n"
+            f"Status: `{status}`\n\n"
+            "## Attributes\n\n"
+            "```json\n"
+            f"{json.dumps(attributes, indent=2, sort_keys=True)}\n"
+            "```\n"
+        )
 
     @staticmethod
     def _apply_delta(delta: BibleDelta, state: BibleState) -> None:
