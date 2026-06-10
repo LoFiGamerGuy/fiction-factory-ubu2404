@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 class SceneRunResult:
     scene_id: str
     job_id: str
+    thread_id: str
     final_text: str
     force_resolved: bool
     convergence_decision: str
@@ -148,7 +149,11 @@ class JobRunner:
         logger.info(
             "JobRunner: starting scene %s (job=%s)", job_context.scene_id, job_context.job_id
         )
-        final_state = machine.run(initial)
+        thread_id = job_context.job_id
+        try:
+            final_state = machine.run(initial, thread_id=thread_id)
+        finally:
+            machine.close()
         logger.info(
             "JobRunner: finished scene %s decision=%s",
             job_context.scene_id,
@@ -162,6 +167,7 @@ class JobRunner:
         return SceneRunResult(
             scene_id=job_context.scene_id,
             job_id=job_context.job_id,
+            thread_id=thread_id,
             final_text=final_state.get("final_text", ""),
             force_resolved=final_state.get("force_resolved", False),
             convergence_decision=final_state.get("convergence_decision", ""),
@@ -276,13 +282,17 @@ class JobRunner:
             controller=self._controller,
             checkpoint_db_path=self._checkpoint_db,
         )
-        final_state = machine.resume(thread_id)
+        try:
+            final_state = machine.resume(thread_id)
+        finally:
+            machine.close()
         if final_state is None:
             return None
 
         return SceneRunResult(
             scene_id=job_context.scene_id,
             job_id=job_context.job_id,
+            thread_id=thread_id,
             final_text=final_state.get("final_text", ""),
             force_resolved=final_state.get("force_resolved", False),
             convergence_decision=final_state.get("convergence_decision", ""),

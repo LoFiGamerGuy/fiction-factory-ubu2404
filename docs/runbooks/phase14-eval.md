@@ -49,6 +49,10 @@ Use `--json` for machine-readable output:
 make eval EVAL_ARGS="--scene path/to/scene.md --json"
 ```
 
+## Checkpoint Resume Status
+
+SQLite checkpoint resume is implemented in `SceneStateMachine` and enabled by default for normal orchestrator `--job` runs. The CLI prints the stable `thread_id`; use that value with `--resume` if a run needs to continue from its checkpoint.
+
 ## Current Scope
 
-This slice does not wire DeepEval into CI, does not checkpoint LangGraph runs, and does not perform production-tier model promotion. It only provides the local metric runner and deterministic tests needed to start Phase 14 evaluation work.
+This slice does not wire DeepEval into CI and does not perform production-tier model promotion. It provides the local metric runner, deterministic tests, and checkpoint resume foundation needed to continue Phase 14 hardening work.

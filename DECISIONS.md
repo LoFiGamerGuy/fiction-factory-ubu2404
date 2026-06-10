@@ -252,6 +252,14 @@ Items explicitly deferred to V2. Do not implement in V1.
 
 ## Section 4: Task 011–015 Decisions
 
+### T014-005 — SQLite Checkpoint Resume Contract
+**Date:** 2026-06-09
+**Statement:** `SceneStateMachine` keeps the `SqliteSaver` context open for the compiled graph lifetime, calls `setup()` before execution, and exposes a stable checkpoint thread ID. `JobRunner` uses the scene job ID as the default thread ID, returns it in `SceneRunResult`, and closes checkpoint resources after run/resume. Normal orchestrator `--job` runs now use `ProjectLayout.checkpoint_db_path()` by default, record `thread_id` in scene history, and print it for later `--resume` use. `langgraph-checkpoint-sqlite` is an explicit dependency.
+**Rationale:** Phase 14 pause/resume is only operational if the SQLite saver remains alive during graph execution, callers can find a stable thread ID, and normal scene jobs actually enable checkpointing. The regression test proves a resumed run does not rerun completed writer/editor/quality nodes after a final-node failure.
+**Supersedes:** Earlier checkpoint plumbing that generated hidden random thread IDs and compiled with a saver context that was closed immediately.
+
+---
+
 ### T012-004 — EvoSkill Trace Semantics and Promotion Closure
 **Date:** 2026-06-09
 **Statement:** EvoSkill traces classify any scene with a revision attempt, RE-PLAN, below-threshold critic score, or `needs_review` signal as a failure trace even if the final routing decision is `GO`. `SkillPromoter` now honors an explicit `data_root`, writes local skills under that root, and publishes accepted skills to the WUPHF `series-bible/{series_id}/editorial-guidelines/{skill_id}` page when WUPHF is configured. `scripts/evoskill_nightly.py` passes its `--data-root` through to promotion and attaches a WUPHF client only when local wiki or API settings are present.

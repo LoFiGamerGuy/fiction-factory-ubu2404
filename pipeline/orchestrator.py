@@ -314,6 +314,7 @@ def _record_scene_result(layout: Any, slot: Any, result: Any) -> None:
     history_path.parent.mkdir(parents=True, exist_ok=True)
     history_entry = {
         "scene_id": slot.scene_id,
+        "thread_id": getattr(result, "thread_id", ""),
         "chapter": slot.chapter,
         "act": slot.act,
         "heat_level": slot.heat_level_target,
@@ -459,11 +460,15 @@ def cmd_job(scene_id: str, series_id: str, book_id: str, config: dict[str, Any])
             slot=slot,
             genre_spec=series_spec.get("genre_config", {}),
         )
+        checkpoint_db_path = Path(
+            str(config.get("checkpoint_db_path", layout.checkpoint_db_path()))
+        )
         runner = _make_job_runner(
             config=config,
             layout=layout,
             series_id=series_id,
             book_id=book_id,
+            checkpoint_db_path=checkpoint_db_path,
         )
         result = runner.run_scene(job_context)
     except Exception as exc:
@@ -491,7 +496,7 @@ def cmd_job(scene_id: str, series_id: str, book_id: str, config: dict[str, Any])
     )
     print(
         f"FINAL: scene '{scene_id}' decision={result.convergence_decision} "
-        f"force_resolved={result.force_resolved}"
+        f"force_resolved={result.force_resolved} thread_id={result.thread_id}"
     )
     return 0
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -309,6 +310,76 @@ class TestSceneStateMachineTransitions:
 
         with pytest.raises(RuntimeError, match="series failed"):
             machine.run(_make_initial_state())
+
+    def test_checkpoint_resume_skips_completed_nodes(self, tmp_path: Path) -> None:
+        """SQLite checkpoint resume should not rerun completed writer/editor/quality nodes."""
+        checkpoint_db = tmp_path / "scene_checkpoints.sqlite"
+        thread_id = "thread-checkpoint-test"
+        writer_first = _make_mock_writer()
+        editor_first = _make_mock_editor(clean=True)
+        quality_first = _make_mock_quality(needs_review=False)
+        continuity_first = MagicMock()
+        continuity_first.run.side_effect = lambda jc: jc
+        series_arc_first = MagicMock()
+        series_arc_first.apply_approved_updates.side_effect = RuntimeError("series failed")
+        agents_first: dict[str, Any] = {
+            "writer_agent": writer_first,
+            "editor_agent": editor_first,
+            "continuity_agent": continuity_first,
+            "series_arc_tracker": series_arc_first,
+            "quality_agent": quality_first,
+        }
+        machine_first = SceneStateMachine(
+            agents=agents_first,
+            job_context_factory=_job_context_factory,
+            controller=ConvergenceController(max_revisions=1),
+            checkpoint_db_path=str(checkpoint_db),
+        )
+
+        with pytest.raises(RuntimeError, match="series failed"):
+            machine_first.run(_make_initial_state(job_id="job-checkpoint"), thread_id=thread_id)
+        assert machine_first.last_thread_id == thread_id
+        machine_first.close()
+        writer_first.run.assert_called_once()
+        editor_first.run.assert_called_once()
+        quality_first.run.assert_called_once()
+
+        writer_resume = MagicMock()
+        writer_resume.run.side_effect = AssertionError("writer reran")
+        editor_resume = MagicMock()
+        editor_resume.run.side_effect = AssertionError("editor reran")
+        quality_resume = MagicMock()
+        quality_resume.run.side_effect = AssertionError("quality reran")
+        quality_resume.update_ledgers = MagicMock()
+        continuity_resume = MagicMock()
+        continuity_resume.run.side_effect = AssertionError("continuity reran")
+        series_arc_resume = MagicMock()
+        agents_resume: dict[str, Any] = {
+            "writer_agent": writer_resume,
+            "editor_agent": editor_resume,
+            "continuity_agent": continuity_resume,
+            "series_arc_tracker": series_arc_resume,
+            "quality_agent": quality_resume,
+        }
+        machine_resume = SceneStateMachine(
+            agents=agents_resume,
+            job_context_factory=_job_context_factory,
+            controller=ConvergenceController(max_revisions=1),
+            checkpoint_db_path=str(checkpoint_db),
+        )
+
+        try:
+            result = machine_resume.resume(thread_id)
+        finally:
+            machine_resume.close()
+
+        assert result is not None
+        assert result["convergence_decision"] == "GO"
+        writer_resume.run.assert_not_called()
+        editor_resume.run.assert_not_called()
+        quality_resume.run.assert_not_called()
+        quality_resume.update_ledgers.assert_called_once()
+        series_arc_resume.apply_approved_updates.assert_called_once()
 
     def test_continuity_bible_contradiction_routes_to_re_plan(self) -> None:
         """ContinuityAgent signal should reach convergence as a RE_PLAN."""

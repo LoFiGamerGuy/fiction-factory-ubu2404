@@ -18,6 +18,7 @@ dependencies = [
     "pyyaml>=6.0",
     # Orchestration + state machine
     "langgraph>=1.0",
+    "langgraph-checkpoint-sqlite>=2.0",
     # Memory
     "mem0ai",
     # ML (V1 scope)

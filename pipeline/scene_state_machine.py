@@ -14,6 +14,7 @@ SQLite checkpointing: pause/resume across process restarts.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any, Literal
 
 from langgraph.graph import END, StateGraph
@@ -228,6 +229,8 @@ class SceneStateMachine:
         self._factory = job_context_factory
         self._controller = controller or ConvergenceController()
         self._checkpoint_db = checkpoint_db_path
+        self._checkpointer_context: Any | None = None
+        self._last_thread_id: str | None = None
         self._graph = self._build()
 
     def _build(self) -> Any:
@@ -261,17 +264,20 @@ class SceneStateMachine:
         if self._checkpoint_db:
             from langgraph.checkpoint.sqlite import SqliteSaver
 
-            with SqliteSaver.from_conn_string(self._checkpoint_db) as checkpointer:
-                return builder.compile(checkpointer=checkpointer)
+            Path(self._checkpoint_db).parent.mkdir(parents=True, exist_ok=True)
+            checkpointer_context = SqliteSaver.from_conn_string(self._checkpoint_db)
+            checkpointer = checkpointer_context.__enter__()
+            self._checkpointer_context = checkpointer_context
+            checkpointer.setup()
+            return builder.compile(checkpointer=checkpointer)
         return builder.compile()
 
-    def run(self, initial_state: SceneState) -> SceneState:
+    def run(self, initial_state: SceneState, thread_id: str | None = None) -> SceneState:
         """Execute the graph from the initial state and return the final state."""
         config: dict[str, Any] = {}
         if self._checkpoint_db:
-            import uuid
-
-            config = {"configurable": {"thread_id": str(uuid.uuid4())}}
+            self._last_thread_id = thread_id or initial_state["job_id"]
+            config = {"configurable": {"thread_id": self._last_thread_id}}
         result: SceneState = self._graph.invoke(initial_state, config=config)
         return result
 
@@ -282,3 +288,15 @@ class SceneStateMachine:
         config: dict[str, Any] = {"configurable": {"thread_id": thread_id}}
         result: SceneState = self._graph.invoke(None, config=config)
         return result
+
+    @property
+    def last_thread_id(self) -> str | None:
+        """Most recent checkpoint thread ID used by run()."""
+        return self._last_thread_id
+
+    def close(self) -> None:
+        """Close the SQLite checkpoint context when this machine is no longer used."""
+        if self._checkpointer_context is None:
+            return
+        self._checkpointer_context.__exit__(None, None, None)
+        self._checkpointer_context = None
