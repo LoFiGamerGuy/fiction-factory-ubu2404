@@ -22,6 +22,12 @@ from pipeline.convergence_controller import ConvergenceController
 from pipeline.core.agent_context import AgentContext
 from pipeline.core.job_context import JobContext
 from pipeline.core.model_router import ModelRouter
+from pipeline.dashboard_events import (
+    append_quality_gate_event,
+    append_run_event,
+    utc_now,
+    write_run_state,
+)
 from pipeline.evoskill.trace_collector import TraceCollector
 from pipeline.scene_state_machine import SceneState, SceneStateMachine
 
@@ -57,6 +63,7 @@ class JobRunner:
         self._max_revisions = max_revisions
         self._checkpoint_db = checkpoint_db_path
         data_root = getattr(agent_ctx.ledger_manager, "data_root", Path("data"))
+        self._data_root = Path(data_root)
         self._trace_collector = trace_collector or TraceCollector(data_root=data_root)
 
         from pipeline.agents.editor_agent import EditorAgent
@@ -150,6 +157,7 @@ class JobRunner:
             "JobRunner: starting scene %s (job=%s)", job_context.scene_id, job_context.job_id
         )
         thread_id = job_context.job_id
+        self._emit_dashboard_start(job_context, thread_id)
         try:
             final_state = machine.run(initial, thread_id=thread_id)
         finally:
@@ -163,6 +171,7 @@ class JobRunner:
         # Phase 12: collect trace for EvoSkill learning after scene completion.
         # Fail-safe: trace collection failure does not break scene execution.
         self._collect_trace_safe(job_context, final_state)
+        self._emit_dashboard_finish(job_context, thread_id, final_state)
 
         return SceneRunResult(
             scene_id=job_context.scene_id,
@@ -175,6 +184,48 @@ class JobRunner:
             error=final_state.get("error", ""),
             final_state=final_state,
         )
+
+    def _emit_dashboard_start(self, job_context: JobContext, thread_id: str) -> None:
+        event = {
+            "event": "run_started",
+            "run_id": job_context.job_id,
+            "thread_id": thread_id,
+            "book_id": job_context.book_id,
+            "scene_id": job_context.scene_id,
+            "active_scene": job_context.scene_id,
+            "current_agent": "writer_agent",
+            "routing_decision": "",
+            "status": "running",
+            "created_at": utc_now(),
+        }
+        write_run_state(self._data_root, job_context.job_id, event)
+        append_run_event(self._data_root, job_context.job_id, event)
+
+    def _emit_dashboard_finish(
+        self,
+        job_context: JobContext,
+        thread_id: str,
+        final_state: SceneState,
+    ) -> None:
+        decision = final_state.get("convergence_decision", "")
+        event = {
+            "event": "run_finished",
+            "run_id": job_context.job_id,
+            "thread_id": thread_id,
+            "book_id": job_context.book_id,
+            "scene_id": job_context.scene_id,
+            "active_scene": job_context.scene_id,
+            "current_agent": "final",
+            "routing_decision": decision,
+            "decision": decision,
+            "status": "completed" if not final_state.get("error") else "error",
+            "force_resolved": final_state.get("force_resolved", False),
+            "revise_count": final_state.get("revise_count", 0),
+            "created_at": utc_now(),
+        }
+        write_run_state(self._data_root, job_context.job_id, event)
+        append_run_event(self._data_root, job_context.job_id, event)
+        append_quality_gate_event(self._data_root, job_context.book_id, event)
 
     def _collect_trace_safe(
         self,

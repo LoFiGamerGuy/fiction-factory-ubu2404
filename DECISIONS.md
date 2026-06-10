@@ -252,6 +252,14 @@ Items explicitly deferred to V2. Do not implement in V1.
 
 ## Section 4: Task 011–015 Decisions
 
+### T013-004 — File-Backed Dashboard Run Events
+**Date:** 2026-06-09
+**Statement:** JobRunner writes Author Dashboard run status and events to files under the configured ledger data root: `{data_root}/{run_id}/run_state.json`, `{data_root}/{run_id}/dashboard_events.jsonl`, and `{data_root}/{book_id}/quality_gate_history.jsonl`. FastAPI reads the same configurable data root for run status, quality gates, series promises, and EvoSkill skills. The SSE endpoint replays persisted run events and still accepts in-process queue events.
+**Rationale:** V1 jobs usually run in a separate CLI process from the FastAPI dashboard. A process-local SSE queue cannot satisfy live-view acceptance by itself. File-backed events are simple, local-dev friendly, testable, and consistent with the existing JSONL/SQLite local architecture.
+**Supersedes:** The in-memory-only SSE event path for cross-process dashboard updates.
+
+---
+
 ### T014-005 — SQLite Checkpoint Resume Contract
 **Date:** 2026-06-09
 **Statement:** `SceneStateMachine` keeps the `SqliteSaver` context open for the compiled graph lifetime, calls `setup()` before execution, and exposes a stable checkpoint thread ID. `JobRunner` uses the scene job ID as the default thread ID, returns it in `SceneRunResult`, and closes checkpoint resources after run/resume. Normal orchestrator `--job` runs now use `ProjectLayout.checkpoint_db_path()` by default, record `thread_id` in scene history, and print it for later `--resume` use. `langgraph-checkpoint-sqlite` is an explicit dependency.

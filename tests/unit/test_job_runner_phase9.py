@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import MagicMock
@@ -186,6 +187,35 @@ def test_job_runner_collects_evoskill_trace_on_completion(
     assert saved_trace["trace_type"] == "success"
     assert saved_trace["failure_mode"] is None
     assert "GO" in saved_trace["routing_decisions"]
+
+
+def test_job_runner_writes_dashboard_events(tmp_path: Path, monkeypatch: Any) -> None:
+    """Phase 13: JobRunner persists run status and quality gate events for dashboard."""
+    _patch_agents(monkeypatch, "clean")
+    runner = JobRunner(agent_ctx=_make_context(tmp_path), model_router=MagicMock(), max_revisions=1)
+
+    result = runner.run_scene(_make_job())
+
+    assert result.convergence_decision == "GO"
+    status = json.loads((tmp_path / "job1" / "run_state.json").read_text(encoding="utf-8"))
+    run_events = [
+        json.loads(line)
+        for line in (tmp_path / "job1" / "dashboard_events.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    quality_events = [
+        json.loads(line)
+        for line in (tmp_path / "book1" / "quality_gate_history.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+
+    assert status["status"] == "completed"
+    assert status["routing_decision"] == "GO"
+    assert [event["event"] for event in run_events] == ["run_started", "run_finished"]
+    assert quality_events[-1]["decision"] == "GO"
+    assert quality_events[-1]["run_id"] == "job1"
 
 
 def test_job_runner_collects_failure_trace_on_contradiction(

@@ -47,13 +47,17 @@ def _data_root() -> Path:
     return Path(configured)
 
 
+def _run_dir(run_id: str) -> Path:
+    return _data_root() / run_id
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
 @app.get("/runs/{run_id}/status")
 async def get_run_status(run_id: str) -> dict[str, Any]:
     """Return the run_state.json for *run_id*, or a sentinel if absent."""
-    state_file = Path("data") / run_id / "run_state.json"
+    state_file = _run_dir(run_id) / "run_state.json"
     if state_file.exists():
         raw: dict[str, Any] = json.loads(state_file.read_text(encoding="utf-8"))
         return raw
@@ -62,19 +66,30 @@ async def get_run_status(run_id: str) -> dict[str, Any]:
 
 @app.get("/runs/{run_id}/stream")
 async def stream_run_events(run_id: str, request: Request) -> EventSourceResponse:
-    """SSE endpoint — streams events from the module-level _sse_queue."""
+    """SSE endpoint — streams persisted run events plus in-process queue events."""
 
     async def _generator() -> AsyncGenerator[dict[str, str], None]:
+        events_file = _run_dir(run_id) / "dashboard_events.jsonl"
+        seen_events = 0
         while True:
             if await request.is_disconnected():
                 break
+            persisted = _read_jsonl(events_file)
+            for item in persisted[seen_events:]:
+                yield {
+                    "data": json.dumps(item),
+                    "event": str(item.get("event", "update")),
+                }
+            seen_events = len(persisted)
             try:
-                item: dict[str, Any] = await asyncio.wait_for(_sse_queue.get(), timeout=1.0)
+                queued_item: dict[str, Any] = await asyncio.wait_for(_sse_queue.get(), timeout=1.0)
             except TimeoutError:
                 continue
+            if str(queued_item.get("run_id", run_id)) != run_id:
+                continue
             yield {
-                "data": json.dumps(item),
-                "event": str(item.get("event", "update")),
+                "data": json.dumps(queued_item),
+                "event": str(queued_item.get("event", "update")),
             }
 
     return EventSourceResponse(_generator())
@@ -131,7 +146,7 @@ async def get_character_metrics(book_id: str, char_id: str) -> dict[str, Any]:
 @app.get("/series/{series_id}/promises")
 async def get_series_promises(series_id: str) -> dict[str, list[dict[str, Any]]]:
     """Return series promise events grouped by promise_id."""
-    rows = _read_jsonl(Path("data") / series_id / "series_promises.jsonl")
+    rows = _read_jsonl(_data_root() / series_id / "series_promises.jsonl")
     grouped: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         promise_id = str(row.get("promise_id", "unknown"))
@@ -142,7 +157,7 @@ async def get_series_promises(series_id: str) -> dict[str, list[dict[str, Any]]]
 @app.get("/series/{series_id}/evoskill")
 async def get_evoskill(series_id: str) -> list[dict[str, Any]]:
     """Return EvoSkill markdown files for *series_id*."""
-    skills_dir = Path("data") / series_id / "skills"
+    skills_dir = _data_root() / series_id / "skills"
     if not skills_dir.exists():
         return []
     result: list[dict[str, Any]] = []
@@ -159,4 +174,4 @@ async def get_evoskill(series_id: str) -> list[dict[str, Any]]:
 @app.get("/books/{book_id}/quality_gates")
 async def get_quality_gates(book_id: str) -> list[dict[str, Any]]:
     """Return all quality gate history events for *book_id*."""
-    return _read_jsonl(Path("data") / book_id / "quality_gate_history.jsonl")
+    return _read_jsonl(_data_root() / book_id / "quality_gate_history.jsonl")
