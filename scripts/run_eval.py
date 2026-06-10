@@ -45,6 +45,21 @@ class EvalRun:
         return self.voice.passed and self.ai_tell.passed
 
 
+@dataclass(frozen=True)
+class EvalSuite:
+    """Complete eval result for a scene corpus."""
+
+    runs: list[EvalRun]
+
+    @property
+    def passed(self) -> bool:
+        return bool(self.runs) and all(run.passed for run in self.runs)
+
+    @property
+    def scene_count(self) -> int:
+        return len(self.runs)
+
+
 def _default_float_env(name: str, default: float) -> float:
     raw = os.getenv(name)
     if raw is None or raw.strip() == "":
@@ -62,20 +77,38 @@ def _threshold(value: str) -> float:
     return parsed
 
 
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("value must be at least 1")
+    return parsed
+
+
 def _find_latest_completed_scene(data_root: Path) -> Path | None:
     """Return the newest completed scene markdown/text/json file under data_root."""
-    if not data_root.exists():
-        return None
-
-    candidates: list[Path] = []
-    for suffix in ("*.md", "*.txt", "*.json"):
-        for path in data_root.rglob(suffix):
-            if "scenes" in path.parts and "drafts" not in path.parts:
-                candidates.append(path)
+    candidates = _collect_scene_paths(data_root, require_scenes_dir=True)
 
     if not candidates:
         return None
     return max(candidates, key=lambda path: path.stat().st_mtime)
+
+
+def _collect_scene_paths(scene_root: Path, require_scenes_dir: bool = False) -> list[Path]:
+    """Return stable scene files under a root, excluding drafts."""
+    if not scene_root.exists():
+        return []
+
+    candidates: list[Path] = []
+    for suffix in ("*.md", "*.txt", "*.json"):
+        for path in scene_root.rglob(suffix):
+            if "drafts" in path.parts:
+                continue
+            if require_scenes_dir and "scenes" not in path.parts:
+                continue
+            if path.is_file():
+                candidates.append(path)
+
+    return sorted(candidates, key=lambda path: str(path.relative_to(scene_root)))
 
 
 def _read_scene_text(scene_path: Path) -> str:
@@ -166,6 +199,30 @@ def evaluate_scene(
     )
 
 
+def evaluate_scenes(
+    scene_paths: list[Path],
+    voice_threshold: float,
+    ai_tell_threshold: float,
+    model_tier: str,
+    use_llm_voice: bool,
+    use_llm_ai_tell: bool,
+) -> EvalSuite:
+    """Evaluate a corpus of scenes and return aggregate pass/fail status."""
+    return EvalSuite(
+        runs=[
+            evaluate_scene(
+                scene_path=scene_path,
+                voice_threshold=voice_threshold,
+                ai_tell_threshold=ai_tell_threshold,
+                model_tier=model_tier,
+                use_llm_voice=use_llm_voice,
+                use_llm_ai_tell=use_llm_ai_tell,
+            )
+            for scene_path in scene_paths
+        ]
+    )
+
+
 def _print_human(result: EvalRun) -> None:
     print("Phase 14 Eval")
     print(f"Scene: {result.scene_path}")
@@ -176,24 +233,75 @@ def _print_human(result: EvalRun) -> None:
     print(f"Result: {'PASS' if result.passed else 'FAIL'}")
 
 
+def _print_suite_human(suite: EvalSuite) -> None:
+    print("Phase 14 Eval Suite")
+    print(f"Scenes: {suite.scene_count}")
+    for run in suite.runs:
+        status = "PASS" if run.passed else "FAIL"
+        print(f"Scene: {run.scene_path} {status}")
+        print(
+            "  "
+            f"VoiceConsistencyMetric={run.voice.score:.4f}/{run.voice.threshold:.4f} "
+            f"AITellMetric={run.ai_tell.score:.4f}/{run.ai_tell.threshold:.4f}"
+        )
+    print(f"Result: {'PASS' if suite.passed else 'FAIL'}")
+
+
 def _print_json(result: EvalRun) -> None:
-    payload = {
+    print(json.dumps(_run_payload(result), indent=2, sort_keys=True))
+
+
+def _metric_payload(metric: MetricScore) -> dict[str, Any]:
+    return {
+        "name": metric.name,
+        "score": metric.score,
+        "threshold": metric.threshold,
+        "passed": metric.passed,
+        "reason": metric.reason,
+    }
+
+
+def _run_payload(result: EvalRun) -> dict[str, Any]:
+    return {
         "scene_path": str(result.scene_path),
         "passed": result.passed,
         "metrics": {
-            "voice_consistency": result.voice.__dict__,
-            "ai_tell": result.ai_tell.__dict__,
+            "voice_consistency": _metric_payload(result.voice),
+            "ai_tell": _metric_payload(result.ai_tell),
         },
+    }
+
+
+def _print_suite_json(suite: EvalSuite) -> None:
+    payload = {
+        "passed": suite.passed,
+        "scene_count": suite.scene_count,
+        "scenes": [_run_payload(run) for run in suite.runs],
     }
     print(json.dumps(payload, indent=2, sort_keys=True))
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run Phase 14 eval metrics on one scene.")
+    parser = argparse.ArgumentParser(description="Run Phase 14 eval metrics on scenes.")
     parser.add_argument(
         "--scene",
         type=Path,
         help="Scene file to evaluate. If omitted, the newest data/**/scenes/* file is used.",
+    )
+    parser.add_argument(
+        "--scene-dir",
+        type=Path,
+        help="Evaluate every markdown/text/json scene under this directory.",
+    )
+    parser.add_argument(
+        "--max-scenes",
+        type=_positive_int,
+        help="Limit --scene-dir evaluation to the first N scenes in stable path order.",
+    )
+    parser.add_argument(
+        "--require-scenes",
+        type=_positive_int,
+        help="Fail unless at least this many scenes are available for evaluation.",
     )
     parser.add_argument(
         "--data-root",
@@ -236,6 +344,38 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.scene and args.scene_dir:
+        parser.error("Pass either --scene or --scene-dir, not both.")
+
+    if args.max_scenes and not args.scene_dir:
+        parser.error("--max-scenes requires --scene-dir.")
+
+    if args.scene_dir:
+        scene_paths = _collect_scene_paths(args.scene_dir)
+        if args.max_scenes:
+            scene_paths = scene_paths[: args.max_scenes]
+        if args.require_scenes and len(scene_paths) < args.require_scenes:
+            parser.error(
+                f"Found {len(scene_paths)} scene(s) under {args.scene_dir}; "
+                f"required {args.require_scenes}."
+            )
+        if not scene_paths:
+            parser.error(f"No scene files found under {args.scene_dir}.")
+
+        suite = evaluate_scenes(
+            scene_paths=[path.resolve() for path in scene_paths],
+            voice_threshold=args.voice_threshold,
+            ai_tell_threshold=args.ai_tell_threshold,
+            model_tier=args.model_tier,
+            use_llm_voice=args.use_llm_voice,
+            use_llm_ai_tell=args.use_llm_ai_tell,
+        )
+        if args.json:
+            _print_suite_json(suite)
+        else:
+            _print_suite_human(suite)
+        return 0 if suite.passed else 1
 
     scene_path = args.scene
     if scene_path is None:

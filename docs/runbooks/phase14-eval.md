@@ -1,6 +1,6 @@
 # Phase 14 Eval Runbook
 
-This is the first Phase 14 slice: local evals for one completed scene.
+This is the local Phase 14 eval path: deterministic evals for one completed scene or a scene corpus.
 
 ## Command
 
@@ -22,6 +22,18 @@ Override thresholds:
 make eval EVAL_ARGS="--scene path/to/scene.md --voice-threshold 0.75 --ai-tell-threshold 0.50"
 ```
 
+Run a 3-scene local acceptance corpus:
+
+```bash
+make eval EVAL_ARGS="--scene-dir path/to/scenes --require-scenes 3"
+```
+
+Limit corpus size in stable path order:
+
+```bash
+make eval EVAL_ARGS="--scene-dir path/to/scenes --max-scenes 3 --require-scenes 3"
+```
+
 Equivalent environment variables:
 
 ```bash
@@ -30,12 +42,12 @@ VOICE_CONSISTENCY_THRESHOLD=0.75 AI_TELL_THRESHOLD=0.50 make eval
 
 ## Behavior
 
-`scripts/run_eval.py` evaluates one scene with:
+`scripts/run_eval.py` evaluates one scene or all scene files under `--scene-dir` with:
 
 - `VoiceConsistencyMetric`: score range `0.0` to `1.0`, higher is better.
 - `AITellMetric`: score range `0.0` to `1.0`, higher is cleaner.
 
-The command prints each score, threshold, pass/fail status, and the metric reason. It exits `0` only when both metrics meet their thresholds. It exits `1` when either metric is below threshold. Missing scene input is a CLI usage error.
+For single-scene mode, the command prints each score, threshold, pass/fail status, and metric reason. For corpus mode, it prints one line per scene plus aggregate pass/fail. It exits `0` only when every evaluated scene meets both thresholds. It exits `1` when any metric is below threshold. Missing scene input or too few scenes for `--require-scenes` is a CLI usage error.
 
 ## Offline Default
 
@@ -43,7 +55,7 @@ The runner is deterministic by default and does not require real API calls. `Voi
 
 ## JSON Output
 
-Use `--json` for machine-readable output:
+Use `--json` for machine-readable output in either single-scene or corpus mode:
 
 ```bash
 make eval EVAL_ARGS="--scene path/to/scene.md --json"
@@ -55,4 +67,4 @@ SQLite checkpoint resume is implemented in `SceneStateMachine` and enabled by de
 
 ## Current Scope
 
-This slice does not wire DeepEval into CI and does not perform production-tier model promotion. It provides the local metric runner, deterministic tests, and checkpoint resume foundation needed to continue Phase 14 hardening work.
+This slice does not wire DeepEval into CI and does not perform production-tier model promotion. It provides the local metric runner, deterministic tests, 3-scene corpus gate, and checkpoint resume foundation needed to continue Phase 14 hardening work.

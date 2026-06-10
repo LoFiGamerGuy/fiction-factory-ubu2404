@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -210,3 +211,82 @@ class TestRunEval:
         os.utime(new_scene, (2, 2))
 
         assert run_eval._find_latest_completed_scene(tmp_path) == new_scene
+
+    def test_run_eval_scene_dir_requires_three_scenes(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        scene_dir = tmp_path / "scenes"
+        scene_dir.mkdir()
+        for index in range(1, 4):
+            (scene_dir / f"scene_{index:02d}.md").write_text(
+                _CLEAN_PROSE
+                + "\n\n"
+                + f'"Keep moving," Sarah said. "Platform {index} is still open."'
+                + " The train lights cut through the rain while she counted each exit.",
+                encoding="utf-8",
+            )
+
+        exit_code = run_eval.main(
+            [
+                "--scene-dir",
+                str(scene_dir),
+                "--require-scenes",
+                "3",
+                "--voice-threshold",
+                "0.10",
+                "--ai-tell-threshold",
+                "0.10",
+            ]
+        )
+
+        captured = capsys.readouterr()
+        assert exit_code == 0
+        assert "Phase 14 Eval Suite" in captured.out
+        assert "Scenes: 3" in captured.out
+        assert "Result: PASS" in captured.out
+
+    def test_run_eval_scene_dir_fails_required_count(self, tmp_path: Path) -> None:
+        scene_dir = tmp_path / "scenes"
+        scene_dir.mkdir()
+        for index in range(1, 3):
+            (scene_dir / f"scene_{index:02d}.md").write_text(_CLEAN_PROSE, encoding="utf-8")
+
+        with pytest.raises(SystemExit):
+            run_eval.main(
+                [
+                    "--scene-dir",
+                    str(scene_dir),
+                    "--require-scenes",
+                    "3",
+                ]
+            )
+
+    def test_run_eval_scene_dir_json_output(
+        self,
+        tmp_path: Path,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        scene_dir = tmp_path / "scenes"
+        scene_dir.mkdir()
+        (scene_dir / "scene_01.md").write_text(_CLEAN_PROSE, encoding="utf-8")
+        (scene_dir / "scene_02.md").write_text(_CLEAN_PROSE, encoding="utf-8")
+
+        exit_code = run_eval.main(
+            [
+                "--scene-dir",
+                str(scene_dir),
+                "--json",
+                "--voice-threshold",
+                "0.10",
+                "--ai-tell-threshold",
+                "0.10",
+            ]
+        )
+
+        payload = json.loads(capsys.readouterr().out)
+        assert exit_code == 0
+        assert payload["passed"] is True
+        assert payload["scene_count"] == 2
+        assert len(payload["scenes"]) == 2

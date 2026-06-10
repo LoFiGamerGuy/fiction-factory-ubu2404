@@ -252,6 +252,12 @@ Items explicitly deferred to V2. Do not implement in V1.
 
 ## Section 4: Task 011–015 Decisions
 
+### T014-006 — Multi-Scene Local Eval Gate
+**Date:** 2026-06-09
+**Statement:** `scripts/run_eval.py` supports a corpus mode via `--scene-dir`, with `--require-scenes` and `--max-scenes` for stable 3-scene local acceptance runs. `make eval` still defaults to the newest completed single scene when no explicit input is provided.
+**Rationale:** Phase 14 needs a local, repeatable 3-scene quality gate before production-tier model promotion. Corpus eval keeps CI/offline behavior deterministic while preserving the single-scene workflow for quick checks and latest-scene smoke tests.
+**Supersedes:** Single-scene-only Phase 14 eval runner behavior.
+
 ### T013-006 — Deterministic Character Metrics Fallback
 **Date:** 2026-06-09
 **Statement:** `QualityAgent.update_ledgers()` now computes and persists per-character dialogue metrics using a stdlib deterministic fallback for explicit `Speaker: dialogue` lines and common `"dialogue," Speaker said` tags. The output preserves the SYN-013 12-field schema, including `function_word_vector`. Full BookNLP speaker attribution remains the planned richer attribution layer.
