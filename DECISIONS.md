@@ -252,6 +252,14 @@ Items explicitly deferred to V2. Do not implement in V1.
 
 ## Section 4: Task 011–015 Decisions
 
+### T013-005 — Historical Dashboard Metric Components
+**Date:** 2026-06-09
+**Statement:** The dashboard now includes `MetricPlotter` for configurable metric history at chapter, scene, and beat granularity, plus `CharacterVoiceChart` for per-character metric comparison. Backend beat granularity currently returns a scene-backed fallback row with `beat_id = scene_id` until true beat-level ledger events are emitted.
+**Rationale:** Phase 13 acceptance needs historical browsing, configurable metric plotting, and character voice comparison. The backend already had SQLite scene/chapter history; adding a stable beat fallback lets the UI and API contract support the planned granularity selector without inventing unsupported beat metrics.
+**Supersedes:** The live-view-only dashboard shell from the first Phase 13 slice.
+
+---
+
 ### T013-004 — File-Backed Dashboard Run Events
 **Date:** 2026-06-09
 **Statement:** JobRunner writes Author Dashboard run status and events to files under the configured ledger data root: `{data_root}/{run_id}/run_state.json`, `{data_root}/{run_id}/dashboard_events.jsonl`, and `{data_root}/{book_id}/quality_gate_history.jsonl`. FastAPI reads the same configurable data root for run status, quality gates, series promises, and EvoSkill skills. The SSE endpoint replays persisted run events and still accepts in-process queue events.

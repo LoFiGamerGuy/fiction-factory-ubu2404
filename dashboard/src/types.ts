@@ -42,3 +42,29 @@ export interface QualityGateEvent extends JsonRecord {
 }
 
 export type QualityGateHistory = QualityGateEvent[];
+
+export type MetricGranularity = "chapter" | "scene" | "beat";
+
+export interface MetricHistoryItem {
+  book_id?: string;
+  chapter_id?: string;
+  scene_id?: string;
+  beat_id?: string;
+  scene_count?: number;
+  word_count?: number;
+  timestamp?: string;
+  metrics?: Record<string, number | string | boolean | null | undefined>;
+}
+
+export interface MetricHistoryResponse {
+  book_id: string;
+  granularity: MetricGranularity;
+  metric?: string | null;
+  items: MetricHistoryItem[];
+}
+
+export interface CharacterMetricsResponse {
+  book_id: string;
+  character_id: string;
+  items: MetricHistoryItem[];
+}

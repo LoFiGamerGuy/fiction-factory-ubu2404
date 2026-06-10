@@ -116,7 +116,7 @@ async def get_ledgers(book_id: str) -> dict[str, Any]:
 @app.get("/books/{book_id}/metrics/history")
 async def get_metrics_history(
     book_id: str,
-    granularity: Literal["chapter", "scene"] = "chapter",
+    granularity: Literal["chapter", "scene", "beat"] = "chapter",
     metric: str | None = None,
 ) -> dict[str, Any]:
     """Return SQLite-backed book metrics history at chapter or scene granularity."""

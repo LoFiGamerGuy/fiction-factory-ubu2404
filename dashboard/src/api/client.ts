@@ -1,4 +1,12 @@
-import type { LedgerSnapshot, QualityGateEvent, QualityGateHistory, RunStatus } from "../types";
+import type {
+  CharacterMetricsResponse,
+  LedgerSnapshot,
+  MetricGranularity,
+  MetricHistoryResponse,
+  QualityGateEvent,
+  QualityGateHistory,
+  RunStatus
+} from "../types";
 
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -32,6 +40,24 @@ export function getLedgers(bookId: string): Promise<LedgerSnapshot> {
 
 export function getQualityGates(bookId: string): Promise<QualityGateHistory> {
   return fetchJson<QualityGateHistory>(`/books/${encodeURIComponent(bookId)}/quality_gates`);
+}
+
+export function getMetricHistory(
+  bookId: string,
+  granularity: MetricGranularity,
+  metric: string
+): Promise<MetricHistoryResponse> {
+  const params = new URLSearchParams({ granularity, metric });
+  return fetchJson<MetricHistoryResponse>(`/books/${encodeURIComponent(bookId)}/metrics/history?${params}`);
+}
+
+export function getCharacterMetrics(
+  bookId: string,
+  characterId: string
+): Promise<CharacterMetricsResponse> {
+  return fetchJson<CharacterMetricsResponse>(
+    `/books/${encodeURIComponent(bookId)}/characters/${encodeURIComponent(characterId)}/metrics`
+  );
 }
 
 export function openRunEventStream(

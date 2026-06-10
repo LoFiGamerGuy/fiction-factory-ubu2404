@@ -247,6 +247,34 @@ class TestMetricsHistory:
         assert rows[0]["scene_id"] == "scene-01"
         assert rows[0]["metrics"] == {"mtld": 72.5}
 
+    def test_beat_metric_history_uses_scene_fallback(
+        self, metrics_ledger: BookMetricsLedger, tmp_book_id: tuple[str, Path]
+    ) -> None:
+        book_id, _ = tmp_book_id
+        metrics_ledger.append(
+            _make_metrics_event(
+                book_id,
+                chapter_id="chapter-01",
+                scene_id="scene-01",
+                interiority=0.25,
+            )
+        )
+
+        rows = metrics_ledger.metrics_history(granularity="beat", metric="interiority_pct")
+
+        assert rows == [
+            {
+                "event_id": rows[0]["event_id"],
+                "book_id": book_id,
+                "chapter_id": "chapter-01",
+                "scene_id": "scene-01",
+                "beat_id": "scene-01",
+                "timestamp": rows[0]["timestamp"],
+                "word_count": 1000,
+                "metrics": {"interiority_pct": 0.25},
+            }
+        ]
+
     def test_invalid_metric_filter_raises_value_error(
         self, metrics_ledger: BookMetricsLedger
     ) -> None:

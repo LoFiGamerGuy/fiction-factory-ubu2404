@@ -182,12 +182,14 @@ class BookMetricsLedger(BaseLedger):
         granularity: str = "chapter",
         metric: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Return scene snapshots or chapter aggregates from the SQLite ledger."""
+        """Return scene snapshots, chapter aggregates, or beat fallback rows."""
+        if granularity == "beat":
+            return self.beat_metrics_history(metric=metric)
         if granularity == "scene":
             return self.scene_metrics_history(metric=metric)
         if granularity == "chapter":
             return self.chapter_metrics_history(metric=metric)
-        raise ValueError("granularity must be 'chapter' or 'scene'")
+        raise ValueError("granularity must be 'chapter', 'scene', or 'beat'")
 
     def scene_metrics_history(self, metric: str | None = None) -> list[dict[str, Any]]:
         """Return one metrics row per finalized scene."""
@@ -201,6 +203,32 @@ class BookMetricsLedger(BaseLedger):
                     "book_id": payload.get("book_id", self._book_id),
                     "chapter_id": payload.get("chapter_id"),
                     "scene_id": payload.get("scene_id"),
+                    "timestamp": payload.get("timestamp"),
+                    "word_count": metrics.get("word_count", 0),
+                    "metrics": self._filter_metrics(metrics, SCENE_METRIC_KEYS, metric),
+                }
+            )
+        return rows
+
+    def beat_metrics_history(self, metric: str | None = None) -> list[dict[str, Any]]:
+        """Return beat-level metric rows.
+
+        V1 ledgers store scene-finalized metrics. Until beat-level events are
+        emitted, expose each scene as a single beat fallback so the dashboard's
+        granularity selector has a stable API contract.
+        """
+        self._validate_metric(metric, SCENE_METRIC_KEYS)
+        rows: list[dict[str, Any]] = []
+        for payload in self._all_payloads():
+            metrics = payload.get("metrics", {})
+            scene_id = payload.get("scene_id")
+            rows.append(
+                {
+                    "event_id": payload.get("event_id"),
+                    "book_id": payload.get("book_id", self._book_id),
+                    "chapter_id": payload.get("chapter_id"),
+                    "scene_id": scene_id,
+                    "beat_id": payload.get("beat_id", scene_id),
                     "timestamp": payload.get("timestamp"),
                     "word_count": metrics.get("word_count", 0),
                     "metrics": self._filter_metrics(metrics, SCENE_METRIC_KEYS, metric),

@@ -221,6 +221,29 @@ def test_metrics_history_scene_from_sqlite(dashboard_data_root: Path) -> None:
     assert body["items"][0]["metrics"] == {"interiority_pct": 0.20}
 
 
+def test_metrics_history_beat_fallback_from_sqlite(dashboard_data_root: Path) -> None:
+    """Beat granularity returns scene-backed fallback points until beat events exist."""
+    book_id = "book-api-beats"
+    _append_metrics_event(
+        dashboard_data_root,
+        book_id,
+        chapter_id="chapter-01",
+        scene_id="scene-01",
+        word_count=1000,
+        interiority_pct=0.20,
+    )
+
+    response = client.get(
+        f"/books/{book_id}/metrics/history?granularity=beat&metric=interiority_pct"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["granularity"] == "beat"
+    assert body["items"][0]["beat_id"] == "scene-01"
+    assert body["items"][0]["metrics"] == {"interiority_pct": 0.20}
+
+
 def test_character_metrics_endpoint_from_sqlite(dashboard_data_root: Path) -> None:
     """Character metrics endpoint returns only scenes containing that character."""
     book_id = "book-api-characters"

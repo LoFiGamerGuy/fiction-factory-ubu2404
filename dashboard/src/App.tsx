@@ -1,11 +1,14 @@
 import { useState } from "react";
+import { CharacterVoiceChart } from "./components/CharacterVoiceChart";
 import { LedgerDashboard } from "./components/LedgerDashboard";
+import { MetricPlotter } from "./components/MetricPlotter";
 import { QualityFeed } from "./components/QualityFeed";
 import { RunMonitor } from "./components/RunMonitor";
 
 export default function App() {
   const [runId, setRunId] = useState("default");
   const [bookId, setBookId] = useState("default");
+  const [characterIdsText, setCharacterIdsText] = useState("sarah,miles");
 
   return (
     <main>
@@ -28,12 +31,18 @@ export default function App() {
           Book ID
           <input value={bookId} onChange={(event) => setBookId(event.target.value)} />
         </label>
+        <label>
+          Character IDs
+          <input value={characterIdsText} onChange={(event) => setCharacterIdsText(event.target.value)} />
+        </label>
       </section>
 
       <section className="dashboard-grid">
         <RunMonitor runId={runId} />
         <QualityFeed bookId={bookId} runId={runId} />
         <LedgerDashboard bookId={bookId} />
+        <MetricPlotter bookId={bookId} />
+        <CharacterVoiceChart bookId={bookId} characterIdsText={characterIdsText} />
       </section>
     </main>
   );
