@@ -140,8 +140,10 @@ class EvoSkillClient:
                 {
                     "trace_id": t.trace_id,
                     "failure_mode": t.failure_mode,
+                    "agent_outputs": t.agent_outputs,
                     "routing_decisions": t.routing_decisions,
                     "quality_scores": t.quality_scores,
+                    "critic_scores": t.critic_scores,
                 }
                 for t in failure_traces
             ],

@@ -16,8 +16,9 @@ class SkillPromoter:
     and writes markdown files under ``data/{series_id}/skills/``.
     """
 
-    def __init__(self, wuphf_client: Any | None = None) -> None:
+    def __init__(self, wuphf_client: Any | None = None, data_root: Path = Path("data")) -> None:
         self._wuphf = wuphf_client
+        self._data_root = data_root
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -31,10 +32,10 @@ class SkillPromoter:
         markdown = self.skill_to_markdown(skill)
 
         if self._wuphf is not None:
-            wiki_path = f"editorial-guidelines/{series_id}/{skill.skill_id}"
+            wiki_path = f"series-bible/{series_id}/editorial-guidelines/{skill.skill_id}"
             self._wuphf.update_wiki(wiki_path, markdown)
 
-        local_path = Path("data") / series_id / "skills" / f"{skill.skill_id}.md"
+        local_path = self._data_root / series_id / "skills" / f"{skill.skill_id}.md"
         local_path.parent.mkdir(parents=True, exist_ok=True)
         local_path.write_text(markdown, encoding="utf-8")
 

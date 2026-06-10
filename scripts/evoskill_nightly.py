@@ -11,14 +11,30 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(WORKSPACE_ROOT))
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s — %(message)s",
 )
 logger = logging.getLogger("evoskill_nightly")
+
+
+def _configured_wuphf_client() -> object | None:
+    has_api = bool(os.environ.get("WUPHF_API_URL") and os.environ.get("WUPHF_API_KEY"))
+    has_wiki_root = bool(os.environ.get("WUPHF_WIKI_ROOT"))
+    if not (has_api or has_wiki_root):
+        return None
+
+    from pipeline.control.wuphf_client import WUPHFClient
+
+    return WUPHFClient()
 
 
 def _active_series(data_root: Path) -> list[str]:
@@ -45,7 +61,7 @@ def main() -> None:
 
     collector = TraceCollector(data_root=data_root)
     client = EvoSkillClient()
-    promoter = SkillPromoter()
+    promoter = SkillPromoter(wuphf_client=_configured_wuphf_client(), data_root=data_root)
 
     since = datetime.now(UTC) - timedelta(hours=24)
     series_list = _active_series(data_root)

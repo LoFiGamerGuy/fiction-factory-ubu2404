@@ -130,6 +130,22 @@ def test_trace_collector_success_classification(tmp_path: Path) -> None:
     assert trace.word_count == 7
 
 
+def test_trace_collector_score_failure_classification(tmp_path: Path) -> None:
+    """Below-threshold downstream critic score yields a failure trace even on GO."""
+    collector = TraceCollector(data_root=tmp_path / "data", score_threshold=0.7)
+    job = _make_job()
+
+    trace = collector.collect_scene_trace(
+        job_context=job,
+        routing_decisions=["GO"],
+        critic_scores={"voice_consistency_score": 0.62},
+    )
+
+    assert trace.trace_type == "failure"
+    assert trace.failure_mode == "quality_gate_fail"
+    assert trace.critic_scores == {"voice_consistency_score": 0.62}
+
+
 # ── Test 3: propose_skill in stub mode ───────────────────────────────────────
 
 
@@ -193,6 +209,38 @@ def test_skill_promoter_local_write(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert "## Recommendation" in content
     assert "quality score below threshold" in content
     assert "inject bible summary" in content
+
+
+def test_skill_promoter_uses_data_root_and_wuphf_path(tmp_path: Path) -> None:
+    """SkillPromoter writes local data_root and publishes under series-bible wiki path."""
+
+    class FakeWUPHF:
+        def __init__(self) -> None:
+            self.pages: dict[str, str] = {}
+
+        def update_wiki(self, page: str, content: str) -> None:
+            self.pages[page] = content
+
+    fake_wuphf = FakeWUPHF()
+    data_root = tmp_path / "custom-data"
+    promoter = SkillPromoter(wuphf_client=fake_wuphf, data_root=data_root)
+    skill = CandidateSkill(
+        skill_id="skill-wiki123",
+        series_id="series-A",
+        condition="voice score below threshold",
+        recommendation="rotate stronger voice exemplar",
+        failure_mode="quality_gate_fail",
+        proposed_at=datetime.now(UTC).isoformat(),
+        score=0.8,
+    )
+
+    promoter.promote_to_wiki(skill, series_id="series-A")
+
+    local_path = data_root / "series-A" / "skills" / "skill-wiki123.md"
+    wiki_path = "series-bible/series-A/editorial-guidelines/skill-wiki123"
+    assert local_path.exists()
+    assert wiki_path in fake_wuphf.pages
+    assert "voice score below threshold" in fake_wuphf.pages[wiki_path]
 
 
 # ── Test 6: series namespace isolation ───────────────────────────────────────

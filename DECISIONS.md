@@ -252,6 +252,14 @@ Items explicitly deferred to V2. Do not implement in V1.
 
 ## Section 4: Task 011–015 Decisions
 
+### T012-004 — EvoSkill Trace Semantics and Promotion Closure
+**Date:** 2026-06-09
+**Statement:** EvoSkill traces classify any scene with a revision attempt, RE-PLAN, below-threshold critic score, or `needs_review` signal as a failure trace even if the final routing decision is `GO`. `SkillPromoter` now honors an explicit `data_root`, writes local skills under that root, and publishes accepted skills to the WUPHF `series-bible/{series_id}/editorial-guidelines/{skill_id}` page when WUPHF is configured. `scripts/evoskill_nightly.py` passes its `--data-root` through to promotion and attaches a WUPHF client only when local wiki or API settings are present.
+**Rationale:** Phase 12 learning must use semantically correct failure traces, not just final scene outcomes. A revised-then-approved scene is still a learning signal. Promotion must also exercise the configured WUPHF/local-wiki path while preserving no-op local-dev behavior when WUPHF is absent.
+**Supersedes:** Earlier local-only skill promotion behavior that ignored `--data-root` and did not publish to `series-bible` when WUPHF was configured.
+
+---
+
 ### T014-004 — Local Offline Eval Default
 **Date:** 2026-06-09
 **Statement:** `make eval` runs `scripts/run_eval.py` against a provided scene or the newest completed scene under `data/**/scenes/`. Phase 14 evals are deterministic by default: `VoiceConsistencyMetric` uses an offline heuristic unless `--use-llm-voice` or `FF_EVAL_USE_LLM=true` is set, and `AITellMetric` uses the structural analyzer with a regex fallback.

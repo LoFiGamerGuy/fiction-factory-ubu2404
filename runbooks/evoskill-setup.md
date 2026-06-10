@@ -8,7 +8,7 @@
 
 EvoSkill learns from scene execution traces to accumulate per-series editorial skills. The pipeline automatically collects traces during normal operation. This runbook covers manual nightly invocation and optional cron automation.
 
-**V1 mode:** Local mock (no external API). Proposer/Evaluator/Frontier run in stub mode with deterministic scoring.
+**V1 mode:** Local mock by default. Proposer/Evaluator/Frontier run in stub mode with deterministic scoring when `EVOSKILL_API_URL` is not configured.
 
 ---
 
@@ -31,7 +31,7 @@ Nightly pass:
 - `failure/quality_gate_fail` - routing_decisions contain REVISE or RE_PLAN
 - `success` - all gates passed, routing_decision=GO
 
-**Skill promotion:** Approved skills -> `data/{series_id}/skills/{skill_id}.md`
+**Skill promotion:** Approved skills -> `{data_root}/{series_id}/skills/{skill_id}.md` and, when WUPHF is configured, `series-bible/{series_id}/editorial-guidelines/{skill_id}`.
 
 ---
 
@@ -53,7 +53,7 @@ data/
       {skill_id}.md
 ```
 
-**No external service required for V1.** EvoSkillClient operates in mock mode when `api_url=None`.
+**No external service required for V1.** EvoSkillClient operates in mock mode when `api_url=None`. WUPHF promotion is enabled only when `WUPHF_WIKI_ROOT` is set or `WUPHF_API_URL` and `WUPHF_API_KEY` are both set.
 
 ---
 
@@ -67,7 +67,7 @@ The repository includes `scripts/evoskill_nightly.py`, which scans all series un
 python scripts/evoskill_nightly.py --data-root data
 ```
 
-The script logs the number of failure traces found, proposed skills, evaluation scores, frontier decisions, and local promotion status.
+The script logs the number of failure traces found, proposed skills, evaluation scores, frontier decisions, and promotion status. `--data-root` controls where local skill markdown is written.
 
 ---
 
@@ -118,8 +118,8 @@ if not kept:
 
 print(f"Skill kept on frontier.")
 
-# Step 5: Promote to wiki/local file
-promoter = SkillPromoter(wuphf_client=None)
+# Step 5: Promote to local file, and optionally WUPHF when configured
+promoter = SkillPromoter(wuphf_client=None, data_root=DATA_ROOT)
 promoter.promote_to_wiki(candidate, series_id=SERIES_ID)
 
 skill_path = DATA_ROOT / SERIES_ID / "skills" / f"{candidate.skill_id}.md"

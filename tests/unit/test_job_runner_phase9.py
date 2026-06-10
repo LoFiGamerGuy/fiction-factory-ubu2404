@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 from pipeline.agents.agent_models import EditorOutput, QualityResult, WriterOutput
@@ -21,6 +21,7 @@ from pipeline.profiles.project_spec import (
     ResolvedSensitivityThresholds,
     ResolvedVoiceAxes,
 )
+from pipeline.scene_state_machine import SceneState
 
 
 def _make_spec() -> ProjectSpec:
@@ -219,6 +220,45 @@ def test_job_runner_collects_failure_trace_on_contradiction(
     saved_trace = json.loads(trace_path.read_text(encoding="utf-8"))
     assert saved_trace["trace_type"] == "failure"
     assert saved_trace["failure_mode"] == "continuity_error"
+
+
+def test_job_runner_trace_marks_revised_go_as_failure(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Phase 12: a final GO after REVISE is still a failure trace for EvoSkill."""
+    from pipeline.evoskill.trace_collector import TraceCollector
+
+    _patch_agents(monkeypatch, "clean")
+
+    data_root = tmp_path / "data"
+    trace_collector = TraceCollector(data_root=data_root)
+    runner = JobRunner(
+        agent_ctx=_make_context(tmp_path),
+        model_router=MagicMock(),
+        max_revisions=1,
+        trace_collector=trace_collector,
+    )
+    final_state: dict[str, Any] = {
+        "convergence_decision": "GO",
+        "revise_count": 1,
+        "final_text": "Clean edited scene.",
+        "bible_contradiction": False,
+        "overdue_promises": [],
+        "writer_output": {},
+        "editor_output": {},
+        "quality_output": {"tier": "pass", "needs_review": False},
+    }
+
+    runner._collect_trace_safe(_make_job(), cast(SceneState, final_state))  # noqa: SLF001
+
+    import json
+
+    trace_path = data_root / "series1" / "traces" / "ch01_sc01.json"
+    saved_trace = json.loads(trace_path.read_text(encoding="utf-8"))
+    assert saved_trace["trace_type"] == "failure"
+    assert saved_trace["failure_mode"] == "quality_gate_fail"
+    assert saved_trace["routing_decisions"] == ["REVISE", "GO"]
 
 
 def test_job_runner_trace_collection_failure_does_not_break_scene(

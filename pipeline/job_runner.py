@@ -181,14 +181,17 @@ class JobRunner:
         the scene execution path (DEC-000-8: heavier-weight, fail-closed).
         """
         try:
-            # Build routing_decisions list from final_state
-            routing_decisions: list[str] = []
+            # Preserve revision history: a final GO after REVISE is still a failure trace.
+            routing_decisions: list[str] = [
+                "REVISE" for _ in range(int(final_state.get("revise_count", 0) or 0))
+            ]
             decision = final_state.get("convergence_decision", "")
             if decision:
                 routing_decisions.append(decision)
 
             # Extract quality_scores if available from quality_output
             quality_scores: dict[str, float] = {}
+            critic_scores: dict[str, float] = {}
             quality_output = final_state.get("quality_output", {})
             if isinstance(quality_output, dict):
                 # QualityResult may have tier or needs_review fields
@@ -196,6 +199,13 @@ class JobRunner:
                     quality_scores["tier_score"] = 1.0 if quality_output["tier"] == "pass" else 0.0
                 if "needs_review" in quality_output:
                     quality_scores["needs_review"] = 1.0 if quality_output["needs_review"] else 0.0
+                raw_critic_scores = quality_output.get("critic_scores")
+                if isinstance(raw_critic_scores, dict):
+                    critic_scores = {
+                        str(key): float(value)
+                        for key, value in raw_critic_scores.items()
+                        if isinstance(value, int | float)
+                    }
 
             # Build updated JobContext with final scene state for trace collection
             trace_job_context = JobContext(
@@ -224,6 +234,7 @@ class JobRunner:
                 job_context=trace_job_context,
                 routing_decisions=routing_decisions,
                 quality_scores=quality_scores,
+                critic_scores=critic_scores,
             )
 
             self._trace_collector.save_trace(trace)

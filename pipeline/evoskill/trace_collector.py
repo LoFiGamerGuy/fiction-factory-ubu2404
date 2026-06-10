@@ -35,8 +35,9 @@ class Trace:
 class TraceCollector:
     """Collects and persists scene execution traces for EvoSkill learning."""
 
-    def __init__(self, data_root: Path = Path("data")) -> None:
+    def __init__(self, data_root: Path = Path("data"), score_threshold: float = 0.7) -> None:
         self._data_root = data_root
+        self._score_threshold = score_threshold
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -58,12 +59,18 @@ class TraceCollector:
         trace_type: Literal["failure", "success"]
         failure_mode: str | None
 
+        quality_score_map = dict(quality_scores) if quality_scores else {}
+        critic_score_map = dict(critic_scores) if critic_scores else {}
+
         if job_context.bible_contradiction:
             trace_type = "failure"
             failure_mode = "continuity_error"
         elif job_context.overdue_promises:
             trace_type = "failure"
             failure_mode = "pacing_violation"
+        elif self._has_score_failure(quality_score_map, critic_score_map):
+            trace_type = "failure"
+            failure_mode = "quality_gate_fail"
         elif any(d in ("REVISE", "RE_PLAN") for d in routing_decisions):
             trace_type = "failure"
             failure_mode = "quality_gate_fail"
@@ -85,8 +92,8 @@ class TraceCollector:
             agent_inputs=agent_inputs,
             agent_outputs=agent_outputs,
             routing_decisions=list(routing_decisions),
-            quality_scores=dict(quality_scores) if quality_scores else {},
-            critic_scores=dict(critic_scores) if critic_scores else {},
+            quality_scores=quality_score_map,
+            critic_scores=critic_score_map,
             word_count=word_count,
             timestamp=datetime.now(UTC).isoformat(),
         )
@@ -149,6 +156,22 @@ class TraceCollector:
     def _build_output_hashes(self, job_context: JobContext) -> dict[str, str]:
         """Return {agent_id: sha256[:16]} for each entry in output_data."""
         return self._build_input_hashes(job_context)
+
+    def _has_score_failure(
+        self,
+        quality_scores: dict[str, float],
+        critic_scores: dict[str, float],
+    ) -> bool:
+        for scores in (quality_scores, critic_scores):
+            for key, value in scores.items():
+                if key == "needs_review" and value >= 1.0:
+                    return True
+                if key == "needs_review":
+                    continue
+                if key.endswith("_score") or key in {"score", "quality", "voice", "ai_tell"}:
+                    if value < self._score_threshold:
+                        return True
+        return False
 
     @staticmethod
     def _trace_to_dict(trace: Trace) -> dict[str, object]:
