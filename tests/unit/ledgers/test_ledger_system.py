@@ -6,6 +6,7 @@ import json
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -41,13 +42,18 @@ def metrics_ledger(tmp_book_id: tuple[str, Path]) -> BookMetricsLedger:
 
 
 def _make_metrics_event(
-    book_id: str, word_count: int = 1000, interiority: float = 0.30
+    book_id: str,
+    word_count: int = 1000,
+    interiority: float = 0.30,
+    chapter_id: str | None = None,
+    scene_id: str | None = None,
+    character_metrics: dict[str, Any] | None = None,
 ) -> BookMetricsEvent:
     return BookMetricsEvent(
         event_id=_uid(),
         book_id=book_id,
-        chapter_id=_uid(),
-        scene_id=_uid(),
+        chapter_id=chapter_id or _uid(),
+        scene_id=scene_id or _uid(),
         timestamp=_now(),
         word_count=word_count,
         interiority_pct=interiority,
@@ -61,6 +67,7 @@ def _make_metrics_event(
         no_fly_violations=0,
         heat_curve_position=0.2,
         sex_scene_flag=False,
+        character_metrics=character_metrics or {},
     )
 
 
@@ -155,6 +162,96 @@ class TestRunningTotals:
         )
         # current=0.20, target=0.30 → headroom=(0.30-0.20)*5000=500
         assert abs(budget["interiority_pct"] - 500.0) < 1.0
+
+
+# ── Metrics history ────────────────────────────────────────────────────────────
+
+
+class TestMetricsHistory:
+    def test_scene_metric_history_supports_metric_filter(
+        self, metrics_ledger: BookMetricsLedger, tmp_book_id: tuple[str, Path]
+    ) -> None:
+        book_id, _ = tmp_book_id
+        metrics_ledger.append(
+            _make_metrics_event(
+                book_id,
+                chapter_id="chapter-01",
+                scene_id="scene-01",
+                interiority=0.25,
+            )
+        )
+
+        rows = metrics_ledger.metrics_history(granularity="scene", metric="interiority_pct")
+
+        assert rows == [
+            {
+                "event_id": rows[0]["event_id"],
+                "book_id": book_id,
+                "chapter_id": "chapter-01",
+                "scene_id": "scene-01",
+                "timestamp": rows[0]["timestamp"],
+                "word_count": 1000,
+                "metrics": {"interiority_pct": 0.25},
+            }
+        ]
+
+    def test_chapter_metric_history_aggregates_weighted_values(
+        self, metrics_ledger: BookMetricsLedger, tmp_book_id: tuple[str, Path]
+    ) -> None:
+        book_id, _ = tmp_book_id
+        metrics_ledger.append(
+            _make_metrics_event(
+                book_id,
+                word_count=1000,
+                interiority=0.20,
+                chapter_id="chapter-01",
+                scene_id="scene-01",
+            )
+        )
+        metrics_ledger.append(
+            _make_metrics_event(
+                book_id,
+                word_count=3000,
+                interiority=0.40,
+                chapter_id="chapter-01",
+                scene_id="scene-02",
+            )
+        )
+
+        rows = metrics_ledger.metrics_history(granularity="chapter")
+
+        assert len(rows) == 1
+        assert rows[0]["chapter_id"] == "chapter-01"
+        assert rows[0]["scene_count"] == 2
+        assert rows[0]["word_count"] == 4000
+        assert abs(rows[0]["metrics"]["interiority_pct"] - 0.35) < 1e-6
+        assert rows[0]["metrics"]["ai_tell_count"] == 2
+
+    def test_character_metrics_history_filters_by_character(
+        self, metrics_ledger: BookMetricsLedger, tmp_book_id: tuple[str, Path]
+    ) -> None:
+        book_id, _ = tmp_book_id
+        metrics_ledger.append(
+            _make_metrics_event(
+                book_id,
+                chapter_id="chapter-01",
+                scene_id="scene-01",
+                character_metrics={"sarah": {"mtld": 72.5}, "miles": {"mtld": 60.0}},
+            )
+        )
+
+        rows = metrics_ledger.character_metrics_history("sarah")
+
+        assert len(rows) == 1
+        assert rows[0]["chapter_id"] == "chapter-01"
+        assert rows[0]["scene_id"] == "scene-01"
+        assert rows[0]["metrics"] == {"mtld": 72.5}
+
+    def test_invalid_metric_filter_raises_value_error(
+        self, metrics_ledger: BookMetricsLedger
+    ) -> None:
+        with pytest.raises(ValueError, match="Unsupported metric"):
+            metrics_ledger.metrics_history(granularity="scene", metric="unknown_metric")
 
 
 # ── QualityEvaluator ───────────────────────────────────────────────────────────
@@ -299,6 +396,35 @@ class TestLedgerManager:
         assert isinstance(dashboard.scene_rhythm, list)
         assert isinstance(dashboard.promises_open, int)
         assert isinstance(dashboard.bible_unresolved_contradictions, int)
+        manager.close()
+
+    def test_metrics_query_methods_wrap_book_metrics_ledger(self, tmp_path: Path) -> None:
+        book_id = _uid()
+        manager = LedgerManager(book_id=book_id, data_root=tmp_path)
+        scene_id = "scene-01"
+        scene = SceneResult(
+            scene_id=scene_id,
+            book_id=book_id,
+            chapter_id="chapter-01",
+            timestamp=_now(),
+            scene_type="dialogue",
+            metrics_event=_make_metrics_event(
+                book_id,
+                chapter_id="chapter-01",
+                scene_id=scene_id,
+                character_metrics={"sarah": {"mtld": 72.5}},
+            ),
+        )
+        manager.update(scene)
+
+        history = manager.get_metrics_history(granularity="scene", metric="interiority_pct")
+        character_history = manager.get_character_metrics("sarah")
+
+        assert history["book_id"] == book_id
+        assert history["items"][0]["scene_id"] == scene_id
+        assert history["items"][0]["metrics"] == {"interiority_pct": 0.30}
+        assert character_history["character_id"] == "sarah"
+        assert character_history["items"][0]["metrics"] == {"mtld": 72.5}
         manager.close()
 
 

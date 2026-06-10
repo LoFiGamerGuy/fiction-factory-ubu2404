@@ -1,12 +1,14 @@
 """JobRunner — thin orchestrator over SceneStateMachine.
 
 Builds the initial SceneState from a JobContext and wires up all agents.
+Integrates TraceCollector for EvoSkill learning (Phase 12).
 """
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from pipeline.agents.quality_agent import QualityAgent
@@ -20,6 +22,7 @@ from pipeline.convergence_controller import ConvergenceController
 from pipeline.core.agent_context import AgentContext
 from pipeline.core.job_context import JobContext
 from pipeline.core.model_router import ModelRouter
+from pipeline.evoskill.trace_collector import TraceCollector
 from pipeline.scene_state_machine import SceneState, SceneStateMachine
 
 logger = logging.getLogger(__name__)
@@ -46,11 +49,14 @@ class JobRunner:
         model_router: ModelRouter,
         max_revisions: int = 3,
         checkpoint_db_path: str | None = None,
+        trace_collector: TraceCollector | None = None,
     ) -> None:
         self._ctx = agent_ctx
         self._router = model_router
         self._max_revisions = max_revisions
         self._checkpoint_db = checkpoint_db_path
+        data_root = getattr(agent_ctx.ledger_manager, "data_root", Path("data"))
+        self._trace_collector = trace_collector or TraceCollector(data_root=data_root)
 
         from pipeline.agents.editor_agent import EditorAgent
 
@@ -149,6 +155,10 @@ class JobRunner:
             final_state.get("convergence_decision", "?"),
         )
 
+        # Phase 12: collect trace for EvoSkill learning after scene completion.
+        # Fail-safe: trace collection failure does not break scene execution.
+        self._collect_trace_safe(job_context, final_state)
+
         return SceneRunResult(
             scene_id=job_context.scene_id,
             job_id=job_context.job_id,
@@ -159,6 +169,79 @@ class JobRunner:
             error=final_state.get("error", ""),
             final_state=final_state,
         )
+
+    def _collect_trace_safe(
+        self,
+        job_context: JobContext,
+        final_state: SceneState,
+    ) -> None:
+        """Collect and save EvoSkill trace after scene completion (fail-safe).
+
+        Trace collection failure logs a warning but does not raise or break
+        the scene execution path (DEC-000-8: heavier-weight, fail-closed).
+        """
+        try:
+            # Build routing_decisions list from final_state
+            routing_decisions: list[str] = []
+            decision = final_state.get("convergence_decision", "")
+            if decision:
+                routing_decisions.append(decision)
+
+            # Extract quality_scores if available from quality_output
+            quality_scores: dict[str, float] = {}
+            quality_output = final_state.get("quality_output", {})
+            if isinstance(quality_output, dict):
+                # QualityResult may have tier or needs_review fields
+                if "tier" in quality_output:
+                    quality_scores["tier_score"] = 1.0 if quality_output["tier"] == "pass" else 0.0
+                if "needs_review" in quality_output:
+                    quality_scores["needs_review"] = 1.0 if quality_output["needs_review"] else 0.0
+
+            # Build updated JobContext with final scene state for trace collection
+            trace_job_context = JobContext(
+                job_id=job_context.job_id,
+                series_id=job_context.series_id,
+                book_id=job_context.book_id,
+                chapter_id=job_context.chapter_id,
+                scene_id=job_context.scene_id,
+                spec=job_context.spec,
+                model_tier=job_context.model_tier,
+                seed=job_context.seed,
+                scene_brief=job_context.scene_brief,
+                word_count_target=job_context.word_count_target,
+                heat_level=job_context.heat_level,
+                final_text=final_state.get("final_text", ""),
+                bible_contradiction=final_state.get("bible_contradiction", False),
+                overdue_promises=final_state.get("overdue_promises", []),
+                output_data={
+                    "writer_agent": final_state.get("writer_output", {}),
+                    "editor_agent": final_state.get("editor_output", {}),
+                    "quality_agent": final_state.get("quality_output", {}),
+                },
+            )
+
+            trace = self._trace_collector.collect_scene_trace(
+                job_context=trace_job_context,
+                routing_decisions=routing_decisions,
+                quality_scores=quality_scores,
+            )
+
+            self._trace_collector.save_trace(trace)
+
+            logger.info(
+                "JobRunner: saved %s trace for scene %s (mode=%s)",
+                trace.trace_type,
+                job_context.scene_id,
+                trace.failure_mode or "success",
+            )
+        except Exception as exc:
+            # Fail-safe: log warning but do not raise or break scene execution
+            logger.warning(
+                "JobRunner: trace collection failed for scene %s: %s",
+                job_context.scene_id,
+                exc,
+                exc_info=True,
+            )
 
     def resume(self, thread_id: str, job_context: JobContext) -> SceneRunResult | None:
         """Resume a checkpointed scene run."""

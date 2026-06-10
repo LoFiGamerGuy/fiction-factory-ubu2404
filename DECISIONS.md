@@ -252,6 +252,30 @@ Items explicitly deferred to V2. Do not implement in V1.
 
 ## Section 4: Task 011–015 Decisions
 
+### T014-004 — Local Offline Eval Default
+**Date:** 2026-06-09
+**Statement:** `make eval` runs `scripts/run_eval.py` against a provided scene or the newest completed scene under `data/**/scenes/`. Phase 14 evals are deterministic by default: `VoiceConsistencyMetric` uses an offline heuristic unless `--use-llm-voice` or `FF_EVAL_USE_LLM=true` is set, and `AITellMetric` uses the structural analyzer with a regex fallback.
+**Rationale:** Phase 14 evaluation must be runnable in local CI and developer workspaces without requiring live Anthropic credentials. LLM judging remains available as an explicit opt-in for prose-quality investigations.
+**Supersedes:** Nothing — implements the first Phase 14 eval slice.
+
+---
+
+### T013-003 — Dashboard Metrics Read From SQLite Ledgers
+**Date:** 2026-06-09
+**Statement:** Author Dashboard metrics endpoints read from `BookMetricsLedger` SQLite events through `LedgerManager`, including chapter aggregates, scene histories, optional metric filters, and per-character metric histories. The initial React dashboard is a minimal Vite live-view shell over the FastAPI endpoints; richer historical charts remain a later Phase 13 slice.
+**Rationale:** SQLite ledgers are the source of truth for historical dashboard state. Removing the previous JSONL placeholder keeps the dashboard aligned with the append-only ledger architecture.
+**Supersedes:** Any placeholder `book_metrics.jsonl` dashboard-history behavior.
+
+---
+
+### T012-003 — JobRunner EvoSkill Trace Capture
+**Date:** 2026-06-09
+**Statement:** `JobRunner` saves an EvoSkill scene trace after each completed scene through `TraceCollector`, using `LedgerManager.data_root` by default. Trace collection is fail-safe: trace write failures are logged and never break scene execution.
+**Rationale:** Phase 12 learning needs production scene traces from normal runs, but trace persistence is advisory relative to manuscript execution. The scene-generation path remains authoritative and must not fail because the learning sidecar cannot write a trace.
+**Supersedes:** Nothing — wires Phase 12 traces into the scene execution path.
+
+---
+
 ### T011-004 — WUPHF Local Git Wiki Mirror
 **Date:** 2026-06-09
 **Statement:** `WUPHFClient` supports a local git-backed wiki mirror via `WUPHF_WIKI_ROOT`. When configured, wiki updates write markdown files under that root; optional `WUPHF_WIKI_AUTO_COMMIT=true` makes a best-effort git commit. `BibleSteward.commit_delta()` syncs committed bible entities to the WUPHF `series-bible` wiki on a best-effort, non-blocking path.

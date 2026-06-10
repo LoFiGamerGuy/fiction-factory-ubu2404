@@ -7,9 +7,9 @@ import dataclasses
 import json
 from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse  # noqa: F401 — kept for type completeness
 from sse_starlette.sse import EventSourceResponse
 
@@ -37,6 +37,14 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
         if line:
             rows.append(json.loads(line))
     return rows
+
+
+def _data_root() -> Path:
+    """Return the ledger data root; tests may override app.state.data_root."""
+    configured = getattr(app.state, "data_root", None)
+    if configured is None:
+        return Path("data")
+    return Path(configured)
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -78,24 +86,46 @@ async def get_ledgers(book_id: str) -> dict[str, Any]:
     # Deferred import — allows tests to mock without ledger data on disk.
     from pipeline.ledgers.ledger_manager import LedgerManager  # noqa: PLC0415
 
-    manager = LedgerManager(book_id, data_root=Path("data"))
-    dashboard = manager.get_dashboard_summary(book_id, "current")
+    manager = LedgerManager(book_id, data_root=_data_root())
     try:
-        result: dict[str, Any] = dataclasses.asdict(dashboard)
-    except TypeError:
-        result = vars(dashboard)
-    return result
+        dashboard = manager.get_dashboard_summary(book_id, "current")
+        try:
+            result: dict[str, Any] = dataclasses.asdict(dashboard)
+        except TypeError:
+            result = vars(dashboard)
+        return result
+    finally:
+        manager.close()
 
 
 @app.get("/books/{book_id}/metrics/history")
-async def get_metrics_history(book_id: str) -> dict[str, list[dict[str, Any]]]:
-    """Return book_metrics events grouped by chapter_id."""
-    rows = _read_jsonl(Path("data") / book_id / "book_metrics.jsonl")
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    for row in rows:
-        chapter_id = str(row.get("chapter_id", "unknown"))
-        grouped.setdefault(chapter_id, []).append(row)
-    return grouped
+async def get_metrics_history(
+    book_id: str,
+    granularity: Literal["chapter", "scene"] = "chapter",
+    metric: str | None = None,
+) -> dict[str, Any]:
+    """Return SQLite-backed book metrics history at chapter or scene granularity."""
+    from pipeline.ledgers.ledger_manager import LedgerManager  # noqa: PLC0415
+
+    manager = LedgerManager(book_id, data_root=_data_root())
+    try:
+        return manager.get_metrics_history(granularity=granularity, metric=metric)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        manager.close()
+
+
+@app.get("/books/{book_id}/characters/{char_id}/metrics")
+async def get_character_metrics(book_id: str, char_id: str) -> dict[str, Any]:
+    """Return SQLite-backed per-scene character metrics for one character."""
+    from pipeline.ledgers.ledger_manager import LedgerManager  # noqa: PLC0415
+
+    manager = LedgerManager(book_id, data_root=_data_root())
+    try:
+        return manager.get_character_metrics(char_id)
+    finally:
+        manager.close()
 
 
 @app.get("/series/{series_id}/promises")

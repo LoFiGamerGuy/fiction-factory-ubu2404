@@ -147,3 +147,107 @@ def test_job_runner_commits_continuity_on_go(tmp_path: Path, monkeypatch: Any) -
 
     assert result.convergence_decision == "GO"
     continuity_instances[0].commit_approved_changes.assert_called_once()
+
+
+def test_job_runner_collects_evoskill_trace_on_completion(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Phase 12: JobRunner saves EvoSkill trace after scene completion (success path)."""
+    from pipeline.evoskill.trace_collector import TraceCollector
+
+    _patch_agents(monkeypatch, "clean")
+
+    data_root = tmp_path / "data"
+    trace_collector = TraceCollector(data_root=data_root)
+
+    runner = JobRunner(
+        agent_ctx=_make_context(tmp_path),
+        model_router=MagicMock(),
+        max_revisions=1,
+        trace_collector=trace_collector,
+    )
+
+    result = runner.run_scene(_make_job())
+
+    assert result.convergence_decision == "GO"
+
+    # Verify trace was saved to disk
+    trace_path = data_root / "series1" / "traces" / "ch01_sc01.json"
+    assert trace_path.exists(), f"Expected trace at {trace_path}"
+
+    # Verify trace content
+    import json
+
+    saved_trace = json.loads(trace_path.read_text(encoding="utf-8"))
+    assert saved_trace["series_id"] == "series1"
+    assert saved_trace["scene_id"] == "ch01_sc01"
+    assert saved_trace["trace_type"] == "success"
+    assert saved_trace["failure_mode"] is None
+    assert "GO" in saved_trace["routing_decisions"]
+
+
+def test_job_runner_collects_failure_trace_on_contradiction(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Phase 12: JobRunner saves failure trace when bible_contradiction occurs."""
+    from pipeline.evoskill.trace_collector import TraceCollector
+
+    _patch_agents(monkeypatch, "contradiction")
+
+    data_root = tmp_path / "data"
+    trace_collector = TraceCollector(data_root=data_root)
+
+    runner = JobRunner(
+        agent_ctx=_make_context(tmp_path),
+        model_router=MagicMock(),
+        max_revisions=1,
+        trace_collector=trace_collector,
+    )
+
+    result = runner.run_scene(_make_job())
+
+    assert result.convergence_decision == "RE_PLAN"
+
+    # Verify failure trace was saved
+    trace_path = data_root / "series1" / "traces" / "ch01_sc01.json"
+    assert trace_path.exists()
+
+    import json
+
+    saved_trace = json.loads(trace_path.read_text(encoding="utf-8"))
+    assert saved_trace["trace_type"] == "failure"
+    assert saved_trace["failure_mode"] == "continuity_error"
+
+
+def test_job_runner_trace_collection_failure_does_not_break_scene(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Phase 12: Trace collection failure is logged but does not break scene execution."""
+    from pipeline.evoskill.trace_collector import TraceCollector
+
+    _patch_agents(monkeypatch, "clean")
+
+    # Create a trace collector that will fail on save
+    trace_collector = TraceCollector(data_root=tmp_path / "data")
+
+    # Monkeypatch save_trace to raise an exception
+    def failing_save(trace: object) -> None:
+        raise RuntimeError("Simulated trace save failure")
+
+    monkeypatch.setattr(trace_collector, "save_trace", failing_save)
+
+    runner = JobRunner(
+        agent_ctx=_make_context(tmp_path),
+        model_router=MagicMock(),
+        max_revisions=1,
+        trace_collector=trace_collector,
+    )
+
+    # Scene should complete successfully despite trace save failure
+    result = runner.run_scene(_make_job())
+
+    assert result.convergence_decision == "GO"
+    assert result.error == ""  # Scene execution was not broken by trace failure

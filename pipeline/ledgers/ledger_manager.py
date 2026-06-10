@@ -91,6 +91,7 @@ class LedgerManager:
     ) -> None:
         self.book_id = book_id
         self.series_id = series_id or book_id
+        self.data_root = data_root
 
         self.book_metrics = BookMetricsLedger(book_id, data_root)
         self.character_arc = CharacterArcLedger(book_id, data_root)
@@ -179,6 +180,27 @@ class LedgerManager:
             promises_critical_open=promise_summary["critical_open"],
             bible_unresolved_contradictions=bible_summary["unresolved_contradictions"],
         )
+
+    def get_metrics_history(
+        self,
+        granularity: str = "chapter",
+        metric: str | None = None,
+    ) -> dict[str, Any]:
+        """Return dashboard metrics history from the BookMetricsLedger."""
+        return {
+            "book_id": self.book_id,
+            "granularity": granularity,
+            "metric": metric,
+            "items": self.book_metrics.metrics_history(granularity=granularity, metric=metric),
+        }
+
+    def get_character_metrics(self, character_id: str) -> dict[str, Any]:
+        """Return per-scene metrics for one character from the BookMetricsLedger."""
+        return {
+            "book_id": self.book_id,
+            "character_id": character_id,
+            "items": self.book_metrics.character_metrics_history(character_id),
+        }
 
     def close(self) -> None:
         for ledger in [

@@ -12,6 +12,47 @@ from typing import Any
 
 from pipeline.ledgers.base import BaseLedger
 
+SCENE_METRIC_KEYS = (
+    "word_count",
+    "interiority_pct",
+    "dialogue_ratio",
+    "exposition_pct",
+    "action_pct",
+    "sensory_density_per_1k",
+    "em_dash_density",
+    "sentence_length_avg",
+    "ai_tell_count",
+    "no_fly_violations",
+    "heat_curve_position",
+    "sex_scene_flag",
+)
+
+CHAPTER_METRIC_KEYS = (
+    "word_count",
+    "interiority_pct",
+    "dialogue_ratio",
+    "exposition_pct",
+    "action_pct",
+    "sensory_density_per_1k",
+    "em_dash_density",
+    "sentence_length_avg",
+    "ai_tell_count",
+    "no_fly_violations",
+    "heat_curve_position",
+    "sex_scene_count",
+)
+
+WEIGHTED_CHAPTER_METRICS = (
+    "interiority_pct",
+    "dialogue_ratio",
+    "exposition_pct",
+    "action_pct",
+    "sensory_density_per_1k",
+    "em_dash_density",
+    "sentence_length_avg",
+    "heat_curve_position",
+)
+
 
 @dataclass
 class BookMetricsEvent:
@@ -135,3 +176,120 @@ class BookMetricsLedger(BaseLedger):
             actual = current.get(key, 0.0)
             result[key] = (target - actual) * word_count_remaining
         return result
+
+    def metrics_history(
+        self,
+        granularity: str = "chapter",
+        metric: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return scene snapshots or chapter aggregates from the SQLite ledger."""
+        if granularity == "scene":
+            return self.scene_metrics_history(metric=metric)
+        if granularity == "chapter":
+            return self.chapter_metrics_history(metric=metric)
+        raise ValueError("granularity must be 'chapter' or 'scene'")
+
+    def scene_metrics_history(self, metric: str | None = None) -> list[dict[str, Any]]:
+        """Return one metrics row per finalized scene."""
+        self._validate_metric(metric, SCENE_METRIC_KEYS)
+        rows: list[dict[str, Any]] = []
+        for payload in self._all_payloads():
+            metrics = payload.get("metrics", {})
+            rows.append(
+                {
+                    "event_id": payload.get("event_id"),
+                    "book_id": payload.get("book_id", self._book_id),
+                    "chapter_id": payload.get("chapter_id"),
+                    "scene_id": payload.get("scene_id"),
+                    "timestamp": payload.get("timestamp"),
+                    "word_count": metrics.get("word_count", 0),
+                    "metrics": self._filter_metrics(metrics, SCENE_METRIC_KEYS, metric),
+                }
+            )
+        return rows
+
+    def chapter_metrics_history(self, metric: str | None = None) -> list[dict[str, Any]]:
+        """Return word-count weighted metrics aggregated by chapter."""
+        self._validate_metric(metric, CHAPTER_METRIC_KEYS)
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for payload in self._all_payloads():
+            chapter_id = str(payload.get("chapter_id", "unknown"))
+            grouped.setdefault(chapter_id, []).append(payload)
+
+        rows: list[dict[str, Any]] = []
+        for chapter_id, payloads in grouped.items():
+            word_count = sum(self._metric_number(p, "word_count") for p in payloads)
+            denom = word_count or 1.0
+            metrics: dict[str, Any] = {
+                "word_count": int(word_count),
+                "ai_tell_count": int(
+                    sum(self._metric_number(p, "ai_tell_count") for p in payloads)
+                ),
+                "no_fly_violations": int(
+                    sum(self._metric_number(p, "no_fly_violations") for p in payloads)
+                ),
+                "sex_scene_count": sum(
+                    1 for p in payloads if p.get("metrics", {}).get("sex_scene_flag")
+                ),
+            }
+            for key in WEIGHTED_CHAPTER_METRICS:
+                metrics[key] = (
+                    sum(
+                        self._metric_number(p, key) * self._metric_number(p, "word_count")
+                        for p in payloads
+                    )
+                    / denom
+                )
+
+            rows.append(
+                {
+                    "book_id": self._book_id,
+                    "chapter_id": chapter_id,
+                    "scene_count": len(payloads),
+                    "word_count": int(word_count),
+                    "metrics": self._filter_metrics(metrics, CHAPTER_METRIC_KEYS, metric),
+                }
+            )
+        return rows
+
+    def character_metrics_history(self, character_id: str) -> list[dict[str, Any]]:
+        """Return per-scene character metrics for a character when present."""
+        rows: list[dict[str, Any]] = []
+        for payload in self._all_payloads():
+            character_metrics = payload.get("character_metrics", {})
+            if not isinstance(character_metrics, dict) or character_id not in character_metrics:
+                continue
+            rows.append(
+                {
+                    "event_id": payload.get("event_id"),
+                    "book_id": payload.get("book_id", self._book_id),
+                    "chapter_id": payload.get("chapter_id"),
+                    "scene_id": payload.get("scene_id"),
+                    "timestamp": payload.get("timestamp"),
+                    "metrics": character_metrics[character_id],
+                }
+            )
+        return rows
+
+    def _validate_metric(self, metric: str | None, allowed: tuple[str, ...]) -> None:
+        if metric is not None and metric not in allowed:
+            allowed_text = ", ".join(allowed)
+            raise ValueError(f"Unsupported metric '{metric}'. Supported metrics: {allowed_text}")
+
+    def _filter_metrics(
+        self,
+        metrics: dict[str, Any],
+        allowed: tuple[str, ...],
+        metric: str | None,
+    ) -> dict[str, Any]:
+        if metric is not None:
+            return {metric: metrics.get(metric)}
+        return {key: metrics[key] for key in allowed if key in metrics}
+
+    def _metric_number(self, payload: dict[str, Any], key: str) -> float:
+        value = payload.get("metrics", {}).get(key, 0.0)
+        if isinstance(value, bool):
+            return float(int(value))
+        if isinstance(value, int | float):
+            return float(value)
+        return 0.0

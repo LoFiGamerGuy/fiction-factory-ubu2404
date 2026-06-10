@@ -1,7 +1,7 @@
 PYTHON := .venv/bin/python
 UV     := uv
 
-.PHONY: install lint test validate-schemas run-pipeline dashboard hooks clean
+.PHONY: install lint test validate-schemas eval run-pipeline dashboard hooks clean
 
 ## First-time setup: create venv, install all deps, install hooks
 install:
@@ -26,6 +26,10 @@ test:
 ## Validate all JSON Schema files
 validate-schemas:
 	$(PYTHON) scripts/validate_schemas.py
+
+## Run Phase 14 eval metrics (pass EVAL_ARGS="--scene path/to/scene.md")
+eval:
+	$(PYTHON) scripts/run_eval.py $(EVAL_ARGS)
 
 ## Run the pipeline orchestrator CLI (pass ARGS="--help" etc.)
 run-pipeline:
