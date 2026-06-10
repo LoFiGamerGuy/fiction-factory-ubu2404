@@ -98,6 +98,7 @@ class QualityAgent(BaseAgent):
         from datetime import UTC, datetime
 
         from pipeline.ledgers.book_metrics_ledger import BookMetricsEvent
+        from pipeline.ledgers.character_metrics import compute_character_metrics
 
         nofly = int(editor_data.get("nofly_violations", 0))
         metrics_event = BookMetricsEvent(
@@ -117,6 +118,7 @@ class QualityAgent(BaseAgent):
             ai_tell_count=nofly,
             no_fly_violations=nofly,
             heat_curve_position=float(job_context.heat_level) / 5.0,
+            character_metrics=compute_character_metrics(text),
         )
 
         scene_result = SceneResult(

@@ -252,6 +252,14 @@ Items explicitly deferred to V2. Do not implement in V1.
 
 ## Section 4: Task 011–015 Decisions
 
+### T013-006 — Deterministic Character Metrics Fallback
+**Date:** 2026-06-09
+**Statement:** `QualityAgent.update_ledgers()` now computes and persists per-character dialogue metrics using a stdlib deterministic fallback for explicit `Speaker: dialogue` lines and common `"dialogue," Speaker said` tags. The output preserves the SYN-013 12-field schema, including `function_word_vector`. Full BookNLP speaker attribution remains the planned richer attribution layer.
+**Rationale:** `CharacterVoiceChart` needs real data from normal scene finalization, not only hand-seeded fixture ledger events. A local fallback gives authors useful metrics for explicitly attributed dialogue without adding runtime fragility or blocking on BookNLP model setup.
+**Supersedes:** Empty `BookMetricsLedger.character_metrics` in normal QualityAgent ledger updates.
+
+---
+
 ### T013-005 — Historical Dashboard Metric Components
 **Date:** 2026-06-09
 **Statement:** The dashboard now includes `MetricPlotter` for configurable metric history at chapter, scene, and beat granularity, plus `CharacterVoiceChart` for per-character metric comparison. Backend beat granularity currently returns a scene-backed fallback row with `beat_id = scene_id` until true beat-level ledger events are emitted.
