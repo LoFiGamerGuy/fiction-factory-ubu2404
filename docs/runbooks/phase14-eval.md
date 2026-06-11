@@ -34,6 +34,26 @@ Limit corpus size in stable path order:
 make eval EVAL_ARGS="--scene-dir path/to/scenes --max-scenes 3 --require-scenes 3"
 ```
 
+Run the full local 3-scene Phase 14 acceptance path with test-tier models:
+
+```bash
+make phase14-acceptance PHASE14_ARGS="--model-tier test --provider openai"
+```
+
+Run the same acceptance path without corpus eval, useful while debugging generation only:
+
+```bash
+make phase14-acceptance PHASE14_ARGS="--model-tier test --provider openai --no-eval"
+```
+
+Production-tier comparison uses the same runner, but should only be run after the test-tier run passes and live API spend is intentional:
+
+```bash
+make phase14-acceptance PHASE14_ARGS="--model-tier production --provider anthropic"
+```
+
+Latest test-tier vs production-tier results are recorded in `docs/runbooks/phase14-model-promotion.md`.
+
 Equivalent environment variables:
 
 ```bash
@@ -48,6 +68,8 @@ VOICE_CONSISTENCY_THRESHOLD=0.75 AI_TELL_THRESHOLD=0.50 make eval
 - `AITellMetric`: score range `0.0` to `1.0`, higher is cleaner.
 
 For single-scene mode, the command prints each score, threshold, pass/fail status, and metric reason. For corpus mode, it prints one line per scene plus aggregate pass/fail. It exits `0` only when every evaluated scene meets both thresholds. It exits `1` when any metric is below threshold. Missing scene input or too few scenes for `--require-scenes` is a CLI usage error.
+
+`scripts/run_phase14_acceptance.py` runs three fixture Romance Module scenes through the full `JobRunner` path and writes a summary to `data/phase14_acceptance/{run_id}/phase14_acceptance_summary.json`. It writes a run-local `model_router.run.json` so `--model-tier production` does not mutate the repository's default `model_router.json`.
 
 ## Offline Default
 
@@ -67,4 +89,4 @@ SQLite checkpoint resume is implemented in `SceneStateMachine` and enabled by de
 
 ## Current Scope
 
-This slice does not wire DeepEval into CI and does not perform production-tier model promotion. It provides the local metric runner, deterministic tests, 3-scene corpus gate, and checkpoint resume foundation needed to continue Phase 14 hardening work.
+This slice does not wire DeepEval into CI and does not itself approve production-tier model promotion. It provides the local metric runner, deterministic tests, 3-scene corpus gate, full 3-scene acceptance runner, and checkpoint resume foundation needed to complete Phase 14 hardening work.

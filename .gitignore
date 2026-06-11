@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 .env
 data/ledgers/
+data/phase14_acceptance/
 data/cost_log.jsonl
 *.egg-info/
 dist/
