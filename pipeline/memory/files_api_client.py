@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -14,17 +15,24 @@ _FILE_IDS_FILENAME = "file_ids.json"
 class FilesAPIClient:
     """Uploads series bible, voice profiles, and character sheets to the Claude Files API.
 
-    File IDs are persisted in ``data/{series_id}/file_ids.json`` so they can be
-    reused across pipeline runs without re-uploading.
+    File IDs are persisted in ``{data_root}/{series_id}/file_ids.json`` so they
+    can be reused within a run without writing provider IDs into source files.
 
     Degrades gracefully: if the Files API is unavailable or fails, methods return
     empty strings / empty dicts and log a warning rather than raising.
     """
 
-    def __init__(self) -> None:
-        import anthropic  # noqa: PLC0415
+    def __init__(self, data_root: Path | None = None, client: Any | None = None) -> None:
+        self._data_root = data_root or Path("data")
+        self._client = client
+        if self._client is None:
+            try:
+                import anthropic  # noqa: PLC0415
 
-        self._client = anthropic.Anthropic()
+                self._client = anthropic.Anthropic()
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("FilesAPIClient: Claude Files API client unavailable: %s", exc)
+                self._client = None
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -67,11 +75,48 @@ class FilesAPIClient:
 
         return uploaded
 
+    def upload_series_assets(
+        self,
+        *,
+        series_id: str,
+        series_bible_path: Path | None = None,
+        voice_profile_path: Path | None = None,
+        character_sheets_dir: Path | None = None,
+    ) -> dict[str, str]:
+        """Upload standard long-context assets and return persisted file IDs.
+
+        Returned keys match the run metadata contract: ``series_bible``,
+        ``voice_profile``, and ``char_{character_sheet_stem}``.
+        """
+        uploaded: dict[str, str] = {}
+        if series_bible_path is not None:
+            file_id = self.upload_series_bible(series_bible_path, series_id)
+            if file_id:
+                uploaded["series_bible"] = file_id
+        if voice_profile_path is not None:
+            file_id = self.upload_voice_profile(voice_profile_path, series_id)
+            if file_id:
+                uploaded["voice_profile"] = file_id
+        if character_sheets_dir is not None:
+            character_ids = self.upload_character_sheets(character_sheets_dir, series_id)
+            uploaded.update({f"char_{stem}": file_id for stem, file_id in character_ids.items()})
+        return uploaded
+
+    def load_file_ids(self, series_id: str) -> dict[str, str]:
+        """Return persisted file IDs for a series from this client's data root."""
+        return self._load_file_ids(series_id)
+
     # ── Internal helpers ───────────────────────────────────────────────────────
 
     def _upload_file(self, path: Path) -> str:
         """Upload a single file to the Files API; return file_id or "" on error."""
         try:
+            if self._client is None:
+                logger.warning(
+                    "FilesAPIClient: Files API unavailable — skipping upload of %s.",
+                    path.name,
+                )
+                return ""
             content = path.read_bytes()
             response = self._client.beta.files.upload(
                 file=(path.name, content, "text/plain"),
@@ -93,8 +138,8 @@ class FilesAPIClient:
             return ""
 
     def _load_file_ids(self, series_id: str) -> dict[str, str]:
-        """Read data/{series_id}/file_ids.json; return {} if not found."""
-        ids_path = Path("data") / series_id / _FILE_IDS_FILENAME
+        """Read {data_root}/{series_id}/file_ids.json; return {} if not found."""
+        ids_path = self._file_ids_path(series_id)
         if not ids_path.exists():
             return {}
         try:
@@ -105,10 +150,13 @@ class FilesAPIClient:
             return {}
 
     def _save_file_ids(self, series_id: str, file_ids: dict[str, str]) -> None:
-        """Write merged file_ids dict to data/{series_id}/file_ids.json."""
-        ids_path = Path("data") / series_id / _FILE_IDS_FILENAME
+        """Write merged file_ids dict to {data_root}/{series_id}/file_ids.json."""
+        ids_path = self._file_ids_path(series_id)
         try:
             ids_path.parent.mkdir(parents=True, exist_ok=True)
             ids_path.write_text(json.dumps(file_ids, indent=2), encoding="utf-8")
         except Exception as exc:  # noqa: BLE001
             logger.warning("FilesAPIClient._save_file_ids failed: %s", exc)
+
+    def _file_ids_path(self, series_id: str) -> Path:
+        return self._data_root / series_id / _FILE_IDS_FILENAME

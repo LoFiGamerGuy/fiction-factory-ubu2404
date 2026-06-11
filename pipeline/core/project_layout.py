@@ -32,6 +32,12 @@ class ProjectLayout:
     def series_facts_path(self) -> Path:
         return self.series_root / "data" / "series" / "series_facts.md"
 
+    def series_voice_profile_path(self) -> Path:
+        return self.series_root / "profiles" / "voice_profile.yaml"
+
+    def character_sheets_dir(self) -> Path:
+        return self.series_root / "data" / "series" / "characters"
+
     def cost_log_path(self) -> Path:
         return self.series_root / "data" / "cost_log.jsonl"
 
