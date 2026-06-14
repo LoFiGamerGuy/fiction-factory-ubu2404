@@ -28,7 +28,7 @@ Nightly pass:
 **Trace classification:**
 - `failure/continuity_error` - bible_contradiction=True
 - `failure/pacing_violation` - overdue_promises present
-- `failure/quality_gate_fail` - routing_decisions contain REVISE or RE_PLAN
+- `failure/quality_gate_fail` - quality or critic score below threshold, `needs_review=True`, or routing_decisions contain REVISE or RE_PLAN
 - `success` - all gates passed, routing_decision=GO
 
 **Skill promotion:** Approved skills -> `{data_root}/{series_id}/skills/{skill_id}.md` and, when WUPHF is configured, `series-bible/{series_id}/editorial-guidelines/{skill_id}`.
@@ -68,6 +68,36 @@ python scripts/evoskill_nightly.py --data-root data
 ```
 
 The script logs the number of failure traces found, proposed skills, evaluation scores, frontier decisions, and promotion status. `--data-root` controls where local skill markdown is written.
+
+### Latest Live Trace Closure
+
+Date: 2026-06-11
+
+Command pattern used for the 12-scene novella run:
+
+```bash
+EVOSKILL_API_URL= EVOSKILL_API_KEY= WUPHF_API_URL= WUPHF_API_KEY= \
+WUPHF_WIKI_ROOT="data/book_acceptance/test-tier-novella-local/wuphf_wiki" \
+.venv/bin/python scripts/evoskill_nightly.py \
+  --data-root "data/book_acceptance/test-tier-novella-local/data"
+```
+
+Result across three repeated local passes:
+
+| Metric | Result |
+|---|---:|
+| Failure traces read | 12 |
+| Dominant failure mode | quality_gate_fail |
+| Skills promoted locally | 3 |
+| WUPHF local wiki pages | 3 |
+| Dashboard `/series/book-acceptance-series/evoskill` skills | 3 |
+
+Artifacts:
+
+- Local skills: `data/book_acceptance/test-tier-novella-local/data/book-acceptance-series/skills/`
+- WUPHF wiki mirror: `data/book_acceptance/test-tier-novella-local/wuphf_wiki/series-bible/book-acceptance-series/editorial-guidelines/`
+
+Note: the live novella run had zero revised-then-GO scenes. The revised-then-GO failure-trace path remains covered by `tests/unit/test_job_runner_phase9.py::test_job_runner_trace_marks_revised_go_as_failure`.
 
 ---
 
@@ -227,6 +257,6 @@ cat data/my-romance-series/skills/skill-abc123.md
 
 ---
 
-**Last updated:** 2026-06-09
+**Last updated:** 2026-06-11
 **Phase:** 12 (EvoSkill)
-**Status:** Manual nightly invocation operational; cron automation optional
+**Status:** Manual nightly invocation operational; live novella traces promoted locally and to WUPHF wiki mirror

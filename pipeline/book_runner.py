@@ -11,7 +11,7 @@ import json
 import logging
 import time
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
@@ -24,6 +24,8 @@ from pipeline.job_runner import JobRunner, SceneRunResult
 from pipeline.profiles.project_spec import ProjectSpec
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_MIN_SCENE_WORD_TARGET = 250
 
 
 class SceneJobRunner(Protocol):
@@ -51,8 +53,10 @@ class BookScene:
     @classmethod
     def from_slot(cls, slot: SceneSlot, scene_brief: str | None = None) -> BookScene:
         """Create a runnable scene from a planned inventory slot."""
-        brief = scene_brief or (
-            f"Write {slot.scene_function} for {slot.scene_id} in chapter {slot.chapter}."
+        brief = (
+            scene_brief
+            or slot.scene_brief
+            or (f"Write {slot.scene_function} for {slot.scene_id} in chapter {slot.chapter}.")
         )
         return cls(
             scene_id=slot.scene_id,
@@ -85,6 +89,8 @@ class BookSceneStatus:
     started_at: str
     completed_at: str
     error: str
+    planned_word_count_target: int = 0
+    adjusted_word_count_target: int = 0
 
     @property
     def successful(self) -> bool:
@@ -107,6 +113,8 @@ class BookSceneStatus:
             started_at=str(raw.get("started_at", "")),
             completed_at=str(raw.get("completed_at", "")),
             error=str(raw.get("error", "")),
+            planned_word_count_target=int(raw.get("planned_word_count_target", 0)),
+            adjusted_word_count_target=int(raw.get("adjusted_word_count_target", 0)),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -125,7 +133,182 @@ class BookSceneStatus:
             "started_at": self.started_at,
             "completed_at": self.completed_at,
             "error": self.error,
+            "planned_word_count_target": self.planned_word_count_target,
+            "adjusted_word_count_target": self.adjusted_word_count_target,
         }
+
+
+@dataclass(frozen=True)
+class WordBudgetScenePlan:
+    """Before-scene budget decision for one book scene."""
+
+    scene_index: int
+    scene_id: str
+    planned_word_count_target: int
+    adjusted_word_count_target: int
+    actual_words_so_far_before: int
+    remaining_scenes_before: int
+    projected_final_count_before: int
+    minimum_target_applied: bool
+
+
+@dataclass
+class WordBudgetController:
+    """Adaptive book-level word-budget controller.
+
+    The controller keeps scene generation inside the total book budget by
+    reallocating the remaining target across remaining scenes after each actual
+    scene word count is known. It never asks for less than ``min_scene_target``.
+    """
+
+    book_word_count_target: int
+    scenes: Sequence[BookScene]
+    min_scene_target: int = DEFAULT_MIN_SCENE_WORD_TARGET
+    _actual_words_so_far: int = 0
+    _adjusted_words_so_far: int = 0
+    _completed_scenes: int = 0
+    _entries: list[dict[str, Any]] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if self.book_word_count_target <= 0:
+            raise ValueError("book_word_count_target must be positive")
+        if self.min_scene_target <= 0:
+            raise ValueError("min_scene_target must be positive")
+        self.scenes = tuple(self.scenes)
+
+    @property
+    def planned_word_count_target(self) -> int:
+        return sum(scene.word_count_target for scene in self.scenes)
+
+    def plan_scene(self, *, scene_index: int, scene: BookScene) -> WordBudgetScenePlan:
+        """Return the adjusted target for the next scene."""
+        remaining_scenes = max(1, len(self.scenes) - self._completed_scenes)
+        raw_target = self._raw_target_for_scene(scene)
+        adjusted_target = self._bounded_target(scene.word_count_target, raw_target)
+        return WordBudgetScenePlan(
+            scene_index=scene_index,
+            scene_id=scene.scene_id,
+            planned_word_count_target=scene.word_count_target,
+            adjusted_word_count_target=adjusted_target,
+            actual_words_so_far_before=self._actual_words_so_far,
+            remaining_scenes_before=remaining_scenes,
+            projected_final_count_before=self._project_final_count(
+                actual_words_so_far=self._actual_words_so_far,
+                adjusted_words_so_far=self._adjusted_words_so_far,
+                completed_scenes=self._completed_scenes,
+            ),
+            minimum_target_applied=raw_target < self.min_scene_target,
+        )
+
+    def apply_plan(self, scene: BookScene, plan: WordBudgetScenePlan) -> BookScene:
+        """Return a copy of the scene with the adjusted target."""
+        return replace(scene, word_count_target=plan.adjusted_word_count_target)
+
+    def record_scene(self, *, plan: WordBudgetScenePlan, record: BookSceneStatus) -> None:
+        """Update controller state and retain a summary row for this scene."""
+        actual_word_count = max(0, int(record.word_count))
+        self._actual_words_so_far += actual_word_count
+        self._adjusted_words_so_far += plan.adjusted_word_count_target
+        self._completed_scenes += 1
+        remaining_after = max(0, len(self.scenes) - self._completed_scenes)
+        projected_after = self._project_final_count(
+            actual_words_so_far=self._actual_words_so_far,
+            adjusted_words_so_far=self._adjusted_words_so_far,
+            completed_scenes=self._completed_scenes,
+        )
+        self._entries.append(
+            {
+                "scene_index": plan.scene_index,
+                "scene_id": plan.scene_id,
+                "status": record.status,
+                "planned_word_count_target": plan.planned_word_count_target,
+                "adjusted_word_count_target": plan.adjusted_word_count_target,
+                "actual_word_count": actual_word_count,
+                "actual_words_so_far_before": plan.actual_words_so_far_before,
+                "actual_words_so_far_after": self._actual_words_so_far,
+                "remaining_scenes_before": plan.remaining_scenes_before,
+                "remaining_scenes_after": remaining_after,
+                "projected_final_count_before": plan.projected_final_count_before,
+                "projected_final_count_after": projected_after,
+                "minimum_target_applied": plan.minimum_target_applied,
+            }
+        )
+
+    def to_status(self) -> dict[str, Any]:
+        """Return a JSON-serializable run-level budget summary."""
+        actual_word_count = self._actual_words_so_far
+        surplus_words = max(0, actual_word_count - self.book_word_count_target)
+        surplus_pct = (
+            round(surplus_words / self.book_word_count_target, 6)
+            if self.book_word_count_target > 0
+            else 0.0
+        )
+        return {
+            "enabled": True,
+            "book_word_count_target": self.book_word_count_target,
+            "planned_word_count_target": self.planned_word_count_target,
+            "actual_word_count": actual_word_count,
+            "remaining_word_budget": self.book_word_count_target - actual_word_count,
+            "surplus_words": surplus_words,
+            "surplus_pct": surplus_pct,
+            "projected_final_count": self._project_final_count(
+                actual_words_so_far=self._actual_words_so_far,
+                adjusted_words_so_far=self._adjusted_words_so_far,
+                completed_scenes=self._completed_scenes,
+            ),
+            "min_scene_target": self.min_scene_target,
+            "scene_count": len(self.scenes),
+            "completed_scene_count": self._completed_scenes,
+            "scenes": list(self._entries),
+        }
+
+    def _raw_target_for_scene(self, scene: BookScene) -> int:
+        remaining_budget = max(0, self.book_word_count_target - self._actual_words_so_far)
+        remaining_planned = self.scenes[self._completed_scenes :]
+        planned_remaining_target = sum(item.word_count_target for item in remaining_planned)
+        if planned_remaining_target <= 0:
+            return scene.word_count_target
+        return round(remaining_budget * scene.word_count_target / planned_remaining_target)
+
+    def _bounded_target(self, planned_target: int, raw_target: int) -> int:
+        return max(self.min_scene_target, min(planned_target, raw_target))
+
+    def _remaining_adjusted_total(
+        self,
+        *,
+        actual_words_so_far: int,
+        completed_scenes: int,
+    ) -> int:
+        remaining_scenes = self.scenes[completed_scenes:]
+        remaining_budget = max(0, self.book_word_count_target - actual_words_so_far)
+        planned_remaining_target = sum(scene.word_count_target for scene in remaining_scenes)
+        total = 0
+        for scene in remaining_scenes:
+            raw_target = (
+                scene.word_count_target
+                if planned_remaining_target <= 0
+                else round(remaining_budget * scene.word_count_target / planned_remaining_target)
+            )
+            total += self._bounded_target(scene.word_count_target, raw_target)
+        return total
+
+    def _project_final_count(
+        self,
+        *,
+        actual_words_so_far: int,
+        adjusted_words_so_far: int,
+        completed_scenes: int,
+    ) -> int:
+        if completed_scenes >= len(self.scenes):
+            return actual_words_so_far
+        actual_to_adjusted_ratio = (
+            actual_words_so_far / adjusted_words_so_far if adjusted_words_so_far > 0 else 1.0
+        )
+        remaining_adjusted = self._remaining_adjusted_total(
+            actual_words_so_far=actual_words_so_far,
+            completed_scenes=completed_scenes,
+        )
+        return actual_words_so_far + round(remaining_adjusted * actual_to_adjusted_ratio)
 
 
 @dataclass(frozen=True)
@@ -147,6 +330,7 @@ class BookRunResult:
     elapsed_seconds: float
     status_path: str
     scenes: list[BookSceneStatus]
+    word_budget_status: dict[str, Any] | None = None
 
     @property
     def passed(self) -> bool:
@@ -174,6 +358,7 @@ class BookRunResult:
             "status_path": self.status_path,
             "passed": self.passed,
             "scenes": [scene.to_dict() for scene in self.scenes],
+            "word_budget_status": self.word_budget_status,
         }
 
 
@@ -255,6 +440,8 @@ class BookRunner:
         resume: bool = True,
         force: bool = False,
         reset_status: bool | None = None,
+        word_budget_target: int | None = None,
+        word_budget_min_scene_target: int = DEFAULT_MIN_SCENE_WORD_TARGET,
     ) -> BookRunResult:
         """Run all scenes from a SceneInventory in inventory order."""
         return self.run_book(
@@ -266,6 +453,8 @@ class BookRunner:
             resume=resume,
             force=force,
             reset_status=reset_status,
+            word_budget_target=word_budget_target,
+            word_budget_min_scene_target=word_budget_min_scene_target,
         )
 
     def run_book(
@@ -279,9 +468,20 @@ class BookRunner:
         resume: bool = True,
         force: bool = False,
         reset_status: bool | None = None,
+        word_budget_target: int | None = None,
+        word_budget_min_scene_target: int = DEFAULT_MIN_SCENE_WORD_TARGET,
     ) -> BookRunResult:
         """Run scenes in order and append one status record per attempted scene."""
         started = time.monotonic()
+        word_budget_controller = (
+            WordBudgetController(
+                book_word_count_target=word_budget_target,
+                scenes=scenes,
+                min_scene_target=word_budget_min_scene_target,
+            )
+            if word_budget_target is not None
+            else None
+        )
         should_reset_status = force if reset_status is None else reset_status
         history = [] if should_reset_status else self._read_status_history()
         latest_by_scene = {record.scene_id: record for record in history}
@@ -294,18 +494,44 @@ class BookRunner:
         records: list[BookSceneStatus] = []
         for index, scene in enumerate(scenes, start=1):
             logger.info("BookRunner: running scene %d/%d: %s", index, len(scenes), scene.scene_id)
+            word_budget_plan: WordBudgetScenePlan | None = None
+            scene_for_run = scene
+            if word_budget_controller is not None:
+                word_budget_plan = word_budget_controller.plan_scene(
+                    scene_index=index,
+                    scene=scene,
+                )
+                scene_for_run = word_budget_controller.apply_plan(scene, word_budget_plan)
             prior_status = latest_by_scene.get(scene.scene_id)
             if resume and not force and self._can_skip_scene(scene, prior_status):
-                record = self._make_skipped_status(run_id=run_id, scene=scene, prior=prior_status)
+                record = self._make_skipped_status(
+                    run_id=run_id,
+                    scene=scene_for_run,
+                    prior=prior_status,
+                    planned_word_count_target=(
+                        word_budget_plan.planned_word_count_target if word_budget_plan else None
+                    ),
+                    adjusted_word_count_target=(
+                        word_budget_plan.adjusted_word_count_target if word_budget_plan else None
+                    ),
+                )
             else:
                 record = self._run_one_scene(
                     run_id=run_id,
                     spec=spec,
-                    scene=scene,
+                    scene=scene_for_run,
                     seed=base_seed + index,
+                    planned_word_count_target=(
+                        word_budget_plan.planned_word_count_target if word_budget_plan else None
+                    ),
+                    adjusted_word_count_target=(
+                        word_budget_plan.adjusted_word_count_target if word_budget_plan else None
+                    ),
                 )
             records.append(record)
             self._append_status(record)
+            if word_budget_controller is not None and word_budget_plan is not None:
+                word_budget_controller.record_scene(plan=word_budget_plan, record=record)
             if stop_on_error and not record.successful:
                 break
 
@@ -326,6 +552,9 @@ class BookRunner:
             elapsed_seconds=elapsed,
             status_path=str(self._status_path),
             scenes=records,
+            word_budget_status=(
+                word_budget_controller.to_status() if word_budget_controller is not None else None
+            ),
         )
 
     def assemble_manuscript(
@@ -425,6 +654,7 @@ class BookRunner:
                 "draft_acceptance_status": (
                     dict(draft_acceptance_status) if draft_acceptance_status is not None else None
                 ),
+                "word_budget_status": result.word_budget_status or {"enabled": False},
                 "summary_path": str(target_path),
             }
         )
@@ -442,6 +672,8 @@ class BookRunner:
         spec: ProjectSpec,
         scene: BookScene,
         seed: int,
+        planned_word_count_target: int | None = None,
+        adjusted_word_count_target: int | None = None,
     ) -> BookSceneStatus:
         scene_started = time.monotonic()
         started_at = _utc_now()
@@ -481,6 +713,8 @@ class BookRunner:
                 started_at=started_at,
                 completed_at=_utc_now(),
                 error=error,
+                planned_word_count_target=planned_word_count_target or scene.word_count_target,
+                adjusted_word_count_target=adjusted_word_count_target or scene.word_count_target,
             )
         except Exception as exc:
             return BookSceneStatus(
@@ -498,6 +732,8 @@ class BookRunner:
                 started_at=started_at,
                 completed_at=_utc_now(),
                 error=str(exc),
+                planned_word_count_target=planned_word_count_target or scene.word_count_target,
+                adjusted_word_count_target=adjusted_word_count_target or scene.word_count_target,
             )
 
     def _append_status(self, record: BookSceneStatus) -> None:
@@ -532,6 +768,8 @@ class BookRunner:
         run_id: str,
         scene: BookScene,
         prior: BookSceneStatus | None,
+        planned_word_count_target: int | None = None,
+        adjusted_word_count_target: int | None = None,
     ) -> BookSceneStatus:
         if prior is None:
             raise ValueError(f"Cannot skip {scene.scene_id}: prior status missing")
@@ -552,6 +790,16 @@ class BookRunner:
             started_at=now,
             completed_at=now,
             error="",
+            planned_word_count_target=(
+                planned_word_count_target
+                if planned_word_count_target is not None
+                else prior.planned_word_count_target
+            ),
+            adjusted_word_count_target=(
+                adjusted_word_count_target
+                if adjusted_word_count_target is not None
+                else prior.adjusted_word_count_target
+            ),
         )
 
 

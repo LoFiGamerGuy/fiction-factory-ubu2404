@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -19,7 +20,12 @@ from pipeline.core.context_manager import (
 )
 from pipeline.core.context_pack_builder import ContextPackBuilder, _compute_provenance_hash
 from pipeline.core.job_context import JobContext
-from pipeline.core.model_router import ModelRouter
+from pipeline.core.model_router import (
+    ModelRouter,
+    ProviderCallResult,
+    TokenUsage,
+    _extract_token_usage,
+)
 from pipeline.core.project_layout import ProjectLayout
 from pipeline.core.voice_profile import VoiceProfile
 
@@ -261,6 +267,82 @@ class TestModelRouterInstructorWrapping:
         assert entry["provider"] == "openai"
         assert "model" in entry
         assert "timestamp" in entry
+
+    def test_cost_log_uses_openai_token_usage(self, tmp_path: Path) -> None:
+        cost_log = tmp_path / "data" / "cost_log.jsonl"
+        router = ModelRouter(config_path=MODEL_ROUTER_JSON, cost_log_path=cost_log)
+        expected = self._SimpleModel(answer="logged")
+
+        with patch(
+            "pipeline.core.model_router.ModelRouter._call_openai",
+            return_value=ProviderCallResult(
+                response=expected,
+                usage=TokenUsage(input_tokens=1000, output_tokens=500),
+            ),
+        ):
+            router.call(
+                messages=[{"role": "user", "content": "test"}],
+                response_model=self._SimpleModel,
+                provider="openai",
+                job_id="j1",
+                agent_id="writer",
+            )
+
+        entry = json.loads(cost_log.read_text().strip())
+        assert entry["input_tokens"] == 1000
+        assert entry["output_tokens"] == 500
+        assert entry["total_tokens"] == 1500
+        assert entry["cost_usd"] > 0
+
+    def test_cost_log_uses_anthropic_token_usage(self, tmp_path: Path) -> None:
+        cost_log = tmp_path / "data" / "cost_log.jsonl"
+        router = ModelRouter(config_path=MODEL_ROUTER_JSON, cost_log_path=cost_log)
+        expected = self._SimpleModel(answer="logged")
+
+        with patch(
+            "pipeline.core.model_router.ModelRouter._call_anthropic",
+            return_value=ProviderCallResult(
+                response=expected,
+                usage=TokenUsage(input_tokens=2000, output_tokens=300),
+            ),
+        ):
+            router.call(
+                messages=[{"role": "user", "content": "test"}],
+                response_model=self._SimpleModel,
+                provider="anthropic",
+                job_id="j2",
+                agent_id="writer",
+            )
+
+        entry = json.loads(cost_log.read_text().strip())
+        assert entry["provider"] == "anthropic"
+        assert entry["input_tokens"] == 2000
+        assert entry["output_tokens"] == 300
+        assert entry["total_tokens"] == 2300
+        assert entry["cost_usd"] > 0
+
+    def test_extracts_openai_usage_shape(self) -> None:
+        response = SimpleNamespace(usage=SimpleNamespace(prompt_tokens=123, completion_tokens=45))
+
+        usage = _extract_token_usage(response)
+
+        assert usage.input_tokens == 123
+        assert usage.output_tokens == 45
+
+    def test_extracts_anthropic_usage_shape_with_cache_tokens(self) -> None:
+        response = SimpleNamespace(
+            usage=SimpleNamespace(
+                input_tokens=100,
+                output_tokens=25,
+                cache_creation_input_tokens=10,
+                cache_read_input_tokens=5,
+            )
+        )
+
+        usage = _extract_token_usage(response)
+
+        assert usage.input_tokens == 115
+        assert usage.output_tokens == 25
 
 
 # ── VoiceProfile ───────────────────────────────────────────────────────────────

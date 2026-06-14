@@ -98,6 +98,35 @@ class TestBookStructurePlannerSceneCount:
         )
         assert (tmp_path / "book01" / "scene_inventory.json").exists()
 
+    def test_scene_outline_overrides_slot_fields(self, tmp_path: Path) -> None:
+        planner = BookStructurePlanner()
+        book_spec = {
+            **_BOOK_SPEC_SIMPLE,
+            "scene_outline": [
+                {
+                    "scene_id": "ch01_sc01",
+                    "scene_function": "meet_cute",
+                    "word_count_target": 1400,
+                    "heat_level_target": 2,
+                    "required_slot_id": "meet_cute",
+                    "scene_brief": "Elena meets Marcus during a rainstorm at the harbor office.",
+                }
+            ],
+        }
+        inv = planner.plan(
+            book_id="book01",
+            series_id="series_test",
+            series_spec=_ROMANCE_SERIES_SPEC,
+            book_spec=book_spec,
+            book_dir=tmp_path / "book01",
+        )
+        first = inv.scenes[0]
+        assert first.scene_function == "meet_cute"
+        assert first.word_count_target == 1400
+        assert first.heat_level_target == 2
+        assert first.required_slot_id == "meet_cute"
+        assert first.scene_brief.startswith("Elena meets Marcus")
+
 
 class TestHeatLevelsInterpolated:
     def test_first_scene_low_heat(self, tmp_path: Path) -> None:

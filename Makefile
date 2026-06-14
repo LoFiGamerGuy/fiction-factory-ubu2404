@@ -1,7 +1,12 @@
 PYTHON := .venv/bin/python
 UV     := uv
+DASHBOARD_DATA_ROOT ?= data
+DASHBOARD_RUN_ID ?= default
+DASHBOARD_BOOK_ID ?= default
+DASHBOARD_SERIES_ID ?= default
+DASHBOARD_CHARACTER_IDS ?= sarah,miles
 
-.PHONY: install lint test validate-schemas eval phase14-acceptance run-pipeline dashboard hooks clean
+.PHONY: install lint test validate-schemas eval phase14-acceptance book-acceptance run-pipeline dashboard hooks clean
 
 ## First-time setup: create venv, install all deps, install hooks
 install:
@@ -35,6 +40,10 @@ eval:
 phase14-acceptance:
 	$(PYTHON) scripts/run_phase14_acceptance.py $(PHASE14_ARGS)
 
+## Run short-book acceptance (pass BOOK_ACCEPTANCE_ARGS="--model-tier test")
+book-acceptance:
+	$(PYTHON) scripts/run_book_acceptance.py $(BOOK_ACCEPTANCE_ARGS)
+
 ## Run the pipeline orchestrator CLI (pass ARGS="--help" etc.)
 run-pipeline:
 	$(PYTHON) -m pipeline.orchestrator $(ARGS)
@@ -42,9 +51,9 @@ run-pipeline:
 ## Start Author Dashboard (Phase 13): FastAPI on :8000 + React dev server
 dashboard:
 	@echo "Starting FastAPI backend on http://localhost:8000 ..."
-	$(PYTHON) -m uvicorn api.main:app --reload --port 8000 &
+	FF_DASHBOARD_DATA_ROOT="$(DASHBOARD_DATA_ROOT)" $(PYTHON) -m uvicorn api.main:app --reload --port 8000 &
 	@echo "Starting React frontend ..."
-	cd dashboard && npm run dev
+	cd dashboard && VITE_DEFAULT_RUN_ID="$(DASHBOARD_RUN_ID)" VITE_DEFAULT_BOOK_ID="$(DASHBOARD_BOOK_ID)" VITE_DEFAULT_SERIES_ID="$(DASHBOARD_SERIES_ID)" VITE_DEFAULT_CHARACTER_IDS="$(DASHBOARD_CHARACTER_IDS)" npm run dev
 
 ## Install pre-commit hooks (already called by `make install`)
 hooks:

@@ -1,0 +1,14 @@
+{
+  "series_root": "data/series",
+  "series_id": "cedar-harbor-romance",
+  "book_id": "book01",
+  "model_router_path": "model_router.json",
+  "model_tier": "test",
+  "llm_provider": "openai",
+  "output_dir": "output/cedar-harbor-romance",
+  "data_root": "data/series/cedar-harbor-romance/data/ledgers",
+  "workspace_root": ".",
+  "max_revisions": 3,
+  "approval_timeout_s": 3600,
+  "seed": 1842
+}

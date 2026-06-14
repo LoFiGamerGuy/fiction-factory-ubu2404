@@ -16,7 +16,7 @@ Run the longer 12-scene novella fixture with:
 make book-acceptance BOOK_ACCEPTANCE_ARGS="--fixture novella --model-tier test --provider openai"
 ```
 
-The command writes generated data under `data/book_acceptance/{run_id}/`, which is gitignored. Book acceptance defaults to `--acceptance-mode draft`: rich drafts may exceed the strict final word-count gate by up to `--draft-surplus-allowed-pct 0.25` when scenes, eval, dashboard checks, and force-resolution checks are clean.
+The command writes generated data under `data/book_acceptance/{run_id}/`, which is gitignored. Book acceptance defaults to `--acceptance-mode draft`: rich drafts may exceed the strict final word-count gate by up to `--draft-surplus-allowed-pct 0.25` when scenes, eval, dashboard checks, and force-resolution checks are clean. Acceptance runs also enable adaptive word-budget control by default: the fixture book target is redistributed across remaining scenes after each actual scene word count is known.
 
 By default, the command also runs deterministic corpus eval and BookStructuralVerifier after scene generation or resume. Draft acceptance requires deterministic corpus eval to pass. Disable eval only while debugging generation:
 
@@ -86,12 +86,75 @@ The deterministic manuscript format is:
 - Per-scene statuses from `book_run_status.jsonl`.
 - Total word count, GO count, force-resolved count, failed scene IDs, and elapsed time.
 - `acceptance_mode` and top-level `acceptance_passed`, where `draft` mode uses `draft_acceptance_status` and `final` mode uses strict verifier acceptance.
+- `word_budget_status`, including the verifier book target, original planned scene-target total, actual words so far, remaining budget, projected final count, minimum scene target, and one row per scene with planned target, adjusted target, actual words, remaining scene count, and projection before/after the scene.
 - `previous_failed_scene_ids` from prior status history and `checkpoint_thread_ids` for every scene in the current run.
 - Manuscript path and summary path.
 - Ledger dashboard summary.
 - `cost_summary` with cost log path, entry count, input/output/total tokens, malformed entry count, and total USD cost.
 - `files_api` with the opt-in Files API flag and run-local uploaded file IDs.
 - Optional `eval_status`, strict `verifier_status`, and `draft_acceptance_status` blocks when those steps are wired or supplied.
+
+The Author Dashboard exposes the same durable summary through `GET /books/{book_id}/summary`. The Word Budget card reads `word_budget_status` from that endpoint and shows the book target, planned scene-target total, actual words, remaining budget, projected final count, minimum scene target, latest adjusted scene target, and the per-scene controller trace.
+
+## Author Dashboard Historical Views
+
+The dashboard shell keeps the same local FastAPI + React workflow and adds historical cards over existing run artifacts:
+
+- `PromiseLedger.tsx` reads `GET /books/{book_id}/promises`, which exposes the SQLite `PromiseLedger` grouped by `promise_id`.
+- `IntimacyTimeline.tsx` reads `GET /books/{book_id}/intimacy`, which exposes `IntimacyEscalationLedger` events in append order.
+- `SeriesTimeline.tsx` reads `GET /series/{series_id}/promises`. The endpoint reads legacy `series_promises.jsonl` when present and the runtime SQLite `SeriesPromiseLedger` at `data_root/series/{series_id}/series_promises.db`.
+- `SkillLibrary.tsx` reads `GET /series/{series_id}/evoskill` for promoted EvoSkill markdown files under `data_root/{series_id}/skills/`.
+- `VoiceCalibration.tsx` reads `GET /series/{series_id}/voice_calibration`, resolving a run-local `voice_profile.yaml` from `data_root/{series_id}/profiles/`, `data_root/series/{series_id}/profiles/`, or the sibling acceptance-run `series/{series_id}/profiles/` tree.
+
+These cards are read-only author views. They do not mutate ledgers, do not trigger generation, and do not require production-tier model access.
+
+## Dashboard Startup Against A Generated Run
+
+The FastAPI dashboard backend reads local artifacts from `FF_DASHBOARD_DATA_ROOT`. The `make dashboard` target exposes that as `DASHBOARD_DATA_ROOT` and can prefill the React selectors with run/book/series IDs:
+
+```bash
+make dashboard \
+  DASHBOARD_DATA_ROOT="data/book_acceptance/test-tier-novella-budgeted/data" \
+  DASHBOARD_RUN_ID="test-tier-novella-budgeted_ch06_sc02_hea_resolution" \
+  DASHBOARD_BOOK_ID="book-acceptance-romance-novella-01" \
+  DASHBOARD_SERIES_ID="book-acceptance-series" \
+  DASHBOARD_CHARACTER_IDS="emma,marcus"
+```
+
+Equivalent manual startup:
+
+```bash
+FF_DASHBOARD_DATA_ROOT="data/book_acceptance/test-tier-novella-budgeted/data" \
+  .venv/bin/python -m uvicorn api.main:app --reload --port 8000
+```
+
+```bash
+cd dashboard && \
+  VITE_DEFAULT_RUN_ID="test-tier-novella-budgeted_ch06_sc02_hea_resolution" \
+  VITE_DEFAULT_BOOK_ID="book-acceptance-romance-novella-01" \
+  VITE_DEFAULT_SERIES_ID="book-acceptance-series" \
+  VITE_DEFAULT_CHARACTER_IDS="emma,marcus" \
+  npm run dev
+```
+
+Expected budgeted novella checks:
+
+- `GET /books/book-acceptance-romance-novella-01/summary` resolves the sibling `series/book-acceptance-series/data/books/.../book_run_summary.json` and returns `summary_found = true` with `word_budget_status.enabled = true`.
+- `GET /books/book-acceptance-romance-novella-01/metrics/history?granularity=scene&metric=word_count` returns 12 scene points.
+- `GET /books/book-acceptance-romance-novella-01/quality_gates` returns 12 quality gate rows.
+- `GET /series/book-acceptance-series/evoskill` returns promoted skills when the EvoSkill closure pass has been run against that data root.
+
+If `summary_found = false`, first verify the generated acceptance run directory exists locally. The `data/book_acceptance/` tree is gitignored and may not exist in a fresh checkout.
+
+Dogfood result, 2026-06-12:
+
+- Data root: `data/book_acceptance/test-tier-novella-budgeted/data`.
+- Run status: `test-tier-novella-budgeted_ch06_sc02_hea_resolution` completed with routing decision `GO`.
+- Summary: `acceptance_passed = true`, adaptive `word_budget_status.enabled = true`, draft actual word count `4403`.
+- Ledgers: `word_count_total = 4403`.
+- Metric history: 12 scene rows and 6 chapter rows for `word_count`.
+- Quality gates: 12 rows.
+- EvoSkill: three local nightly passes promoted 3 skills for `book-acceptance-series`, making the dashboard Skill Library card non-empty for this run.
 
 ## Acceptance Modes
 
@@ -109,6 +172,20 @@ Draft acceptance passes when:
 `draft_acceptance_status` records `target_word_count`, `actual_word_count`, `surplus_words`, `surplus_pct`, `draft_surplus_allowed_pct`, and `within_draft_surplus`. A passing over-target draft is classified as `draft_surplus`.
 
 `--acceptance-mode final` preserves the prior strict behavior: top-level `acceptance_passed` requires the normal scene/run checks and a passing `BookStructuralVerifier`. Use final mode for publish-ready manuscript gating.
+
+## Adaptive Word-Budget Control
+
+Acceptance runs pass the fixture verifier target into `BookRunner.run_book(word_budget_target=...)`. Before each scene, `WordBudgetController` computes:
+
+- The planned target for the current scene.
+- Actual finalized words so far.
+- Remaining scenes and remaining book budget.
+- Projected final word count based on the current actual-to-adjusted ratio.
+- The adjusted target sent to `JobContext.word_count_target` and therefore to `WriterAgent`.
+
+The adjusted target is proportional to the remaining book budget and the remaining planned scene weights. It is capped at the original scene target so under-budget scenes do not cause runaway expansion, and it is floored at 250 words so later scenes are compressed but not made useless. This is a prompt-budget control loop only; it does not change `BookStructuralVerifier`, `draft_acceptance_status`, or `--acceptance-mode final`.
+
+For the novella fixture, the controller starts from the 4,600-word verifier target rather than the twelve fixed 450-word scene prompts. That means the first scene target is about 383 words, then later targets adapt if actual production-tier output runs long.
 
 ## Token And Cost Accounting
 
@@ -137,6 +214,44 @@ make book-acceptance BOOK_ACCEPTANCE_ARGS="--model-tier production --provider an
 ```
 
 Run production-tier only when live API spend is intentional.
+
+## First Production Scaffold
+
+The first full-length production-ready scaffold lives at:
+
+- Series root: `data/series/cedar-harbor-romance/`
+- Series spec: `data/series/cedar-harbor-romance/spec.yaml`
+- Book spec: `data/series/cedar-harbor-romance/data/books/book01/spec.yaml`
+- Run config: `data/series/cedar-harbor-romance/pipeline_config.json`
+- Generated scene inventory: `data/series/cedar-harbor-romance/data/books/book01/scene_inventory.json`
+
+The scaffold is `book01`, titled `The Renovation Pact`: a 65,000-word contemporary small-town romance planned as 25 chapters x 2 scenes. The book spec includes 50 authored scene briefs. `BookStructurePlanner` carries these briefs into `scene_inventory.json`, and the orchestrator now uses `SceneSlot.scene_brief` for scene jobs.
+
+Validate the scaffold:
+
+```bash
+.venv/bin/python -m pipeline.orchestrator \
+  --validate-spec data/series/cedar-harbor-romance/spec.yaml \
+  --config data/series/cedar-harbor-romance/pipeline_config.json
+```
+
+Regenerate the deterministic scene inventory:
+
+```bash
+.venv/bin/python -m pipeline.orchestrator \
+  --init-book cedar-harbor-romance 1 \
+  --config data/series/cedar-harbor-romance/pipeline_config.json
+```
+
+Run the first scene through the normal scene loop, when live test-tier model spend is intentional:
+
+```bash
+.venv/bin/python -m pipeline.orchestrator \
+  --job ch01_sc01 \
+  --config data/series/cedar-harbor-romance/pipeline_config.json
+```
+
+Continue scenes in `scene_inventory.json` order. Keep `model_router.json` defaulted to `test`; switch to production tier only through explicit run-local config changes after test-tier proof.
 
 ## Live Acceptance Results
 
@@ -212,6 +327,7 @@ Artifact checks:
 Dashboard API checks against `data/book_acceptance/test-tier-novella-local/data`:
 
 - `/runs/test-tier-novella-local_ch06_sc02_hea_resolution/status`: completed, GO.
+- `/books/book-acceptance-romance-novella-01/summary`: `word_budget_status.enabled = true`.
 - `/books/book-acceptance-romance-novella-01/ledgers`: `word_count_total = 4702`.
 - `/books/book-acceptance-romance-novella-01/metrics/history?granularity=scene&metric=word_count`: 12 rows.
 - `/books/book-acceptance-romance-novella-01/metrics/history?granularity=chapter&metric=word_count`: 6 rows.
@@ -270,6 +386,7 @@ Artifacts:
 Dashboard API checks against `data/book_acceptance/production-tier-novella-local/data`:
 
 - `/runs/production-tier-novella-local_ch06_sc02_hea_resolution/status`: completed, GO.
+- `/books/book-acceptance-romance-novella-01/summary`: resolves `book_run_summary.json` from the sibling `series/` output tree.
 - `/books/book-acceptance-romance-novella-01/ledgers`: `word_count_total = 5464`.
 - `/books/book-acceptance-romance-novella-01/metrics/history?granularity=scene&metric=word_count`: 12 rows.
 - `/books/book-acceptance-romance-novella-01/metrics/history?granularity=chapter&metric=word_count`: 6 rows.
@@ -282,4 +399,54 @@ Qualitative sample, `ch02_sc02_first_spark`:
 
 Conclusion:
 
-Production-tier novella generation is operational and stronger on deterministic eval averages. It is acceptable as a rich draft because the overage is within the +25% draft surplus ceiling, but it is not publish-ready because it exceeded the strict structural word-count gate. Keep `model_router.json` defaulted to `test`; run production tier only through explicit run-local commands until word-budget control is tightened.
+Production-tier novella generation is operational and stronger on deterministic eval averages. It is acceptable as a rich draft because the overage is within the +25% draft surplus ceiling, but it is not publish-ready because it exceeded the strict structural word-count gate. New acceptance runs include adaptive word-budget control to reduce this overrun risk, but keep `model_router.json` defaulted to `test`; run production tier only through explicit run-local commands when live API spend is intentional.
+
+## Budgeted Novella Acceptance Results
+
+Date: 2026-06-11
+
+Test-tier command:
+
+```bash
+make book-acceptance BOOK_ACCEPTANCE_ARGS="--fixture novella --model-tier test --provider openai --run-id test-tier-novella-budgeted --force"
+```
+
+Production-tier command, run with explicit user approval:
+
+```bash
+make book-acceptance BOOK_ACCEPTANCE_ARGS="--fixture novella --model-tier production --provider anthropic --run-id production-tier-novella-budgeted --force"
+```
+
+Result: PASS for both runs. The production-tier budgeted run passed strict `BookStructuralVerifier`, which the earlier unbudgeted production-tier run failed.
+
+| Metric | Budgeted test tier | Prior production tier | Budgeted production tier |
+|---|---:|---:|---:|
+| Provider | OpenAI | Anthropic | Anthropic |
+| Scenes completed | 12/12 | 12/12 | 12/12 |
+| GO decisions | 12/12 | 12/12 | 12/12 |
+| Force-resolved scenes | 0 | 0 | 0 |
+| Planned scene-target total | 5400 | 5400 | 5400 |
+| Controller book target | 4600 | n/a | 4600 |
+| Manuscript word count | 4403 | 5464 | 4614 |
+| Draft acceptance | PASS: `draft_within_target` | PASS: `draft_surplus` (+18.78%) | PASS: `draft_surplus` (+0.30%) |
+| BookStructuralVerifier | PASS | FAIL: word count outside [4140-5060] | PASS |
+| Corpus eval | PASS, 12 scenes | PASS, 12 scenes | PASS, 12 scenes |
+| VoiceConsistencyMetric average | 0.9254 | 0.9458 | 0.9517 |
+| AITellMetric average | 0.8250 | 0.8583 | 0.9167 |
+| Runtime | 189.835s | 304.54s | 243.363s |
+| Cost log entries | 23 | 24 | 20 |
+| Total tokens | 22482 | 45143 | 33579 |
+| Estimated cost | $0.00872145 | $0.331653 | $0.240705 |
+
+Artifacts:
+
+- Budgeted test summary: `data/book_acceptance/test-tier-novella-budgeted/series/book-acceptance-series/data/books/book-acceptance-romance-novella-01/book_run_summary.json`
+- Budgeted production summary: `data/book_acceptance/production-tier-novella-budgeted/series/book-acceptance-series/data/books/book-acceptance-romance-novella-01/book_run_summary.json`
+- Budgeted production manuscript: `data/book_acceptance/production-tier-novella-budgeted/series/book-acceptance-series/data/books/book-acceptance-romance-novella-01/manuscript.md`
+
+Controller trace notes:
+
+- The fixed fixture scene prompts still plan 12 x 450 words = 5400 words.
+- `WordBudgetController` uses the 4600-word verifier target for acceptance runs.
+- The budgeted production run sent adjusted scene targets between 383 and 403 words and finished at 4614 words.
+- The production run reduced the prior overage by 850 words, moved from strict verifier FAIL to PASS, reduced total tokens by 11564, and reduced estimated cost by about $0.09.

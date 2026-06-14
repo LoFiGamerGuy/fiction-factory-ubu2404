@@ -81,7 +81,7 @@ main {
 
 .controls {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -126,6 +126,10 @@ main {
 
 .ledger-panel {
   grid-column: 1 / -1;
+}
+
+.word-budget-panel .cost-row {
+  margin-bottom: 16px;
 }
 
 .historical-panel {
@@ -297,6 +301,41 @@ main {
 
 .compact-list li {
   padding: 10px 12px;
+}
+
+.budget-trace {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.budget-trace-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.7fr) repeat(4, minmax(80px, 1fr));
+  gap: 10px;
+  align-items: center;
+  min-width: 620px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+
+.budget-trace-header {
+  color: var(--muted);
+  background: #111722;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.budget-trace-row span:first-child,
+.budget-trace-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .compact-list span,

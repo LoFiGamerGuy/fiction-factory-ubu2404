@@ -776,6 +776,7 @@ def run_acceptance(
         base_seed=8400,
         resume=resume,
         force=force,
+        word_budget_target=get_fixture_word_count_target(fixture),
     )
     manuscript = runner.assemble_manuscript(scenes) if result.passed else None
     scene_dir = layout.book_dir() / "scenes"
@@ -960,6 +961,15 @@ def main(argv: list[str] | None = None) -> int:
                 f"{draft_status['target_word_count']} words, "
                 f"surplus {draft_status['surplus_pct']:.2%} <= "
                 f"{draft_status['draft_surplus_allowed_pct']:.2%})"
+            )
+        word_budget_status = payload.get("word_budget_status")
+        if isinstance(word_budget_status, dict) and word_budget_status.get("enabled"):
+            print(
+                "Word budget: "
+                f"{word_budget_status['actual_word_count']}/"
+                f"{word_budget_status['book_word_count_target']} words, "
+                f"projected {word_budget_status['projected_final_count']}, "
+                f"min scene target {word_budget_status['min_scene_target']}"
             )
         print(f"Status: {payload['status_path']}")
         print(f"Output: {payload['output_dir']}")

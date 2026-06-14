@@ -1,0 +1,66 @@
+profile_id: author_cedar_harbor_scaffold
+version: "0.2"
+display_name: "Cedar Harbor Commercial Romance Voice Scaffold"
+
+voice_axes:
+  sentence_level:
+    length_mean_words: 14.0
+    length_std_words: 5.0
+    opener_entropy_min: 0.55
+    mood_distribution:
+      declarative: 0.62
+      interrogative: 0.13
+      imperative: 0.08
+      exclamatory: 0.03
+  lexical:
+    diversity_metric: MTLD
+    diversity_target: 74.0
+    formality_register: casual
+    rare_word_frequency: 0.025
+    concrete_noun_ratio: 0.60
+  syntactic:
+    subordinate_clause_rate: 0.23
+    parallel_structure_rate: 0.10
+    passive_voice_rate_max: 0.07
+  dialogue:
+    to_narration_ratio: 0.40
+    internal_monologue_share: 0.22
+    tag_style: minimal
+  sensory:
+    visual: 14.0
+    auditory: 7.0
+    olfactory: 3.0
+    gustatory: 2.0
+    tactile: 11.0
+    proprioceptive: 4.0
+  pacing:
+    paragraph_length_mean_words: 42.0
+    short_long_alternation_index: 0.58
+  metaphor:
+    figurative_per_1k: 7.0
+    domain_bias: [weather, craft, light, saltwater]
+  subtext:
+    modal_hedge_per_1k: 3.5
+    adverb_density: 3.0
+    adjective_stacking_max: 2
+  cadence:
+    em_dash_per_1k_max: 2.5
+    semicolon_per_1k: 0.3
+    ellipsis_per_1k: 0.8
+
+forbidden_constructions:
+  - "\\ba testament to\\b"
+  - "\\bit was more than just\\b"
+
+enforcement_weights:
+  sentence_level: 0.15
+  lexical: 0.15
+  syntactic: 0.10
+  dialogue: 0.20
+  sensory: 0.15
+  pacing: 0.10
+  metaphor: 0.05
+  subtext: 0.10
+  cadence: 0.00
+
+calibration_history: []

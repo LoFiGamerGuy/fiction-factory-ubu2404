@@ -6,6 +6,8 @@ __pycache__/
 .env
 data/ledgers/
 data/phase14_acceptance/
+data/book_acceptance/
+data/phase7_smoke_test/*/data/series/*/series_promises.db
 data/cost_log.jsonl
 *.egg-info/
 dist/

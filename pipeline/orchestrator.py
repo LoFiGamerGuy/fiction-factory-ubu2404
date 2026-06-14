@@ -235,6 +235,7 @@ def _make_job_context(
 
     scene_brief = str(
         config.get("scene_brief")
+        or getattr(slot, "scene_brief", "")
         or f"Write {slot.scene_function} for {scene_id} in chapter {slot.chapter}."
     )
     return JobContext(

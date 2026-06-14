@@ -82,19 +82,32 @@ def _scenes() -> tuple[BookScene, ...]:
 
 
 class FakeJobRunner:
-    def __init__(self, ctx: AgentContext, *, fail_on: str | None = None) -> None:
+    def __init__(
+        self,
+        ctx: AgentContext,
+        *,
+        fail_on: str | None = None,
+        word_count_by_scene: dict[str, int] | None = None,
+    ) -> None:
         self.ctx = ctx
         self.fail_on = fail_on
+        self.word_count_by_scene = word_count_by_scene or {}
         self.scene_ids: list[str] = []
         self.seeds: list[int] = []
+        self.word_count_targets: list[int] = []
 
     def run_scene(self, job_context: JobContext) -> SceneRunResult:
         self.scene_ids.append(job_context.scene_id)
         self.seeds.append(job_context.seed)
+        self.word_count_targets.append(job_context.word_count_target)
         if job_context.scene_id == self.fail_on:
             raise RuntimeError(f"boom: {job_context.scene_id}")
 
-        text = f'{job_context.scene_id}: "We choose the next step," Emma said to Marcus.'
+        word_count = self.word_count_by_scene.get(job_context.scene_id)
+        if word_count is None:
+            text = f'{job_context.scene_id}: "We choose the next step," Emma said to Marcus.'
+        else:
+            text = " ".join(f"w{i}" for i in range(word_count))
         output_path = self.ctx.project_layout.scene_output_path(
             job_context.chapter_id,
             job_context.scene_id,
@@ -349,3 +362,86 @@ def test_scenes_from_inventory_preserves_inventory_order_and_overrides_briefs() 
     assert [scene.scene_id for scene in scenes] == ["ch01_sc01", "ch01_sc02"]
     assert scenes[0].scene_brief == "Write meet_cute for ch01_sc01 in chapter 1."
     assert scenes[1].scene_brief == "Custom brief."
+
+
+def test_word_budget_controller_adjusts_targets_after_overrun(tmp_path: Path) -> None:
+    ctx = _ctx(tmp_path)
+    scenes = (
+        BookScene("ch01_sc01", 1, "Opening beat.", 400, 1),
+        BookScene("ch01_sc02", 1, "Complication beat.", 400, 1),
+        BookScene("ch02_sc01", 2, "Escalation beat.", 400, 2),
+        BookScene("ch02_sc02", 2, "Resolution beat.", 400, 2),
+    )
+    fake_runner = FakeJobRunner(
+        ctx,
+        word_count_by_scene={
+            "ch01_sc01": 520,
+            "ch01_sc02": 500,
+            "ch02_sc01": 470,
+            "ch02_sc02": 440,
+        },
+    )
+    runner = BookRunner(agent_ctx=ctx, job_runner=fake_runner)
+
+    result = runner.run_book(
+        run_id="book-run-budget",
+        spec=_spec(),
+        scenes=scenes,
+        word_budget_target=1200,
+        word_budget_min_scene_target=250,
+    )
+
+    assert result.passed
+    assert fake_runner.word_count_targets[0] == 300
+    assert fake_runner.word_count_targets[1] == 250
+    assert all(target >= 250 for target in fake_runner.word_count_targets)
+    assert all(target <= 400 for target in fake_runner.word_count_targets)
+    assert [record.adjusted_word_count_target for record in result.scenes] == [300, 250, 250, 250]
+
+    budget_status = result.word_budget_status
+    assert budget_status is not None
+    assert budget_status["enabled"] is True
+    assert budget_status["book_word_count_target"] == 1200
+    assert budget_status["planned_word_count_target"] == 1600
+    assert budget_status["actual_word_count"] == 1930
+    assert budget_status["surplus_words"] == 730
+    assert budget_status["projected_final_count"] == 1930
+    scene_rows = budget_status["scenes"]
+    assert scene_rows[0]["planned_word_count_target"] == 400
+    assert scene_rows[0]["adjusted_word_count_target"] == 300
+    assert scene_rows[1]["actual_words_so_far_before"] == 520
+    assert scene_rows[1]["remaining_scenes_before"] == 3
+    assert scene_rows[1]["minimum_target_applied"] is True
+
+
+def test_book_run_summary_includes_word_budget_status(tmp_path: Path) -> None:
+    ctx = _ctx(tmp_path)
+    fake_runner = FakeJobRunner(
+        ctx,
+        word_count_by_scene={
+            "ch01_sc01": 120,
+            "ch01_sc02": 120,
+            "ch02_sc01": 120,
+        },
+    )
+    runner = BookRunner(agent_ctx=ctx, job_runner=fake_runner)
+    scenes = _scenes()
+    result = runner.run_book(
+        run_id="book-run-budget-summary",
+        spec=_spec(),
+        scenes=scenes,
+        word_budget_target=360,
+    )
+    manuscript = runner.assemble_manuscript(scenes)
+
+    payload = runner.write_book_run_summary(
+        result=result,
+        provider="fake",
+        manuscript=manuscript,
+    )
+    saved = json.loads(Path(payload["summary_path"]).read_text(encoding="utf-8"))
+
+    assert saved["word_budget_status"]["enabled"] is True
+    assert saved["word_budget_status"]["book_word_count_target"] == 360
+    assert saved["word_budget_status"]["actual_word_count"] == 360
+    assert len(saved["word_budget_status"]["scenes"]) == 3

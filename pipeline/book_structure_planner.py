@@ -34,6 +34,7 @@ class SceneSlot:
     heat_level_target: int
     position: float  # 0.0–1.0 in book
     required_slot_id: str | None = None
+    scene_brief: str = ""
 
 
 @dataclass
@@ -118,6 +119,8 @@ class BookStructurePlanner:
             or series_spec.get("required_scene_slots")
             or []
         )
+        scene_outline_by_id, scene_outline_by_index = _scene_outline_maps(book_spec)
+        auto_distribute_required_slots = not scene_outline_by_index
 
         # Act proportions: act1≈25%, act2≈50%, act3≈25%
         act1_end = int(total_scenes * 0.25)
@@ -140,9 +143,30 @@ class BookStructurePlanner:
 
             heat = _interpolate_heat(position, heat_waypoints)
             func = scene_functions[idx % len(scene_functions)] if scene_functions else "scene"
+            scene_id = f"ch{chapter:02d}_sc{scene_number:02d}"
+
+            outline = scene_outline_by_id.get(scene_id)
+            if outline is None and idx < len(scene_outline_by_index):
+                outline = scene_outline_by_index[idx]
+            if outline is None:
+                outline = {}
+
+            func = str(outline.get("scene_function") or outline.get("function") or func)
+            heat = int(outline.get("heat_level_target") or outline.get("heat_level") or heat)
+            scene_word_target = int(
+                outline.get("word_count_target") or outline.get("word_target") or words_per_scene
+            )
 
             req_slot: str | None = None
-            if required_slots and required_slot_idx < len(required_slots):
+            explicit_slot = outline.get("required_slot_id") or outline.get("required_slot")
+            if explicit_slot:
+                req_slot = str(explicit_slot)
+            if (
+                req_slot is None
+                and auto_distribute_required_slots
+                and required_slots
+                and required_slot_idx < len(required_slots)
+            ):
                 # Distribute required slots evenly across the book
                 slot_id = required_slots[required_slot_idx]
                 if slot_id in {"HEA", "HFN", "HEA_or_HFN"}:
@@ -153,18 +177,19 @@ class BookStructurePlanner:
                     req_slot = slot_id
                     required_slot_idx += 1
 
-            scene_id = f"ch{chapter:02d}_sc{scene_number:02d}"
+            scene_brief = str(outline.get("scene_brief") or outline.get("brief") or "")
             scenes.append(
                 SceneSlot(
                     scene_id=scene_id,
                     chapter=chapter,
                     act=act,
                     scene_number=scene_number,
-                    word_count_target=words_per_scene,
+                    word_count_target=scene_word_target,
                     scene_function=func,
                     heat_level_target=heat,
                     position=round(position, 4),
                     required_slot_id=req_slot,
+                    scene_brief=scene_brief,
                 )
             )
 
@@ -193,3 +218,23 @@ class BookStructurePlanner:
         )
         logger.info("BookStructurePlanner: wrote %d scenes to %s", total_scenes, target_path)
         return inventory
+
+
+def _scene_outline_maps(
+    book_spec: dict[str, Any],
+) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
+    """Return scene-outline entries addressable by scene_id and by inventory order."""
+    raw_outline = book_spec.get("scene_outline") or book_spec.get("scenes") or []
+    by_id: dict[str, dict[str, Any]] = {}
+    by_index: list[dict[str, Any]] = []
+    if not isinstance(raw_outline, list):
+        return by_id, by_index
+    for raw_entry in raw_outline:
+        if not isinstance(raw_entry, dict):
+            continue
+        entry: dict[str, Any] = dict(raw_entry)
+        by_index.append(entry)
+        scene_id = entry.get("scene_id")
+        if scene_id:
+            by_id[str(scene_id)] = entry
+    return by_id, by_index

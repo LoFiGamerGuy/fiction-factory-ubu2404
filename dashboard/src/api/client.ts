@@ -1,11 +1,17 @@
 import type {
+  BookIntimacyResponse,
+  BookPromisesResponse,
+  BookRunSummary,
   CharacterMetricsResponse,
+  EvoSkillEntry,
   LedgerSnapshot,
   MetricGranularity,
   MetricHistoryResponse,
+  PromiseGroups,
   QualityGateEvent,
   QualityGateHistory,
-  RunStatus
+  RunStatus,
+  VoiceCalibrationResponse
 } from "../types";
 
 const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, "") ?? "";
@@ -38,6 +44,18 @@ export function getLedgers(bookId: string): Promise<LedgerSnapshot> {
   return fetchJson<LedgerSnapshot>(`/books/${encodeURIComponent(bookId)}/ledgers`);
 }
 
+export function getBookRunSummary(bookId: string): Promise<BookRunSummary> {
+  return fetchJson<BookRunSummary>(`/books/${encodeURIComponent(bookId)}/summary`);
+}
+
+export function getBookPromises(bookId: string): Promise<BookPromisesResponse> {
+  return fetchJson<BookPromisesResponse>(`/books/${encodeURIComponent(bookId)}/promises`);
+}
+
+export function getBookIntimacy(bookId: string): Promise<BookIntimacyResponse> {
+  return fetchJson<BookIntimacyResponse>(`/books/${encodeURIComponent(bookId)}/intimacy`);
+}
+
 export function getQualityGates(bookId: string): Promise<QualityGateHistory> {
   return fetchJson<QualityGateHistory>(`/books/${encodeURIComponent(bookId)}/quality_gates`);
 }
@@ -58,6 +76,18 @@ export function getCharacterMetrics(
   return fetchJson<CharacterMetricsResponse>(
     `/books/${encodeURIComponent(bookId)}/characters/${encodeURIComponent(characterId)}/metrics`
   );
+}
+
+export function getSeriesPromises(seriesId: string): Promise<PromiseGroups> {
+  return fetchJson<PromiseGroups>(`/series/${encodeURIComponent(seriesId)}/promises`);
+}
+
+export function getEvoSkill(seriesId: string): Promise<EvoSkillEntry[]> {
+  return fetchJson<EvoSkillEntry[]>(`/series/${encodeURIComponent(seriesId)}/evoskill`);
+}
+
+export function getVoiceCalibration(seriesId: string): Promise<VoiceCalibrationResponse> {
+  return fetchJson<VoiceCalibrationResponse>(`/series/${encodeURIComponent(seriesId)}/voice_calibration`);
 }
 
 export function openRunEventStream(

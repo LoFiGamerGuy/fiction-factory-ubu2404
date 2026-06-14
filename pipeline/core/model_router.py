@@ -13,8 +13,9 @@ import json
 import logging
 import os
 import time
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from pydantic import BaseModel
 
@@ -24,6 +25,27 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 ResponseT = TypeVar("ResponseT", bound=BaseModel)
+
+
+@dataclass(frozen=True)
+class TokenUsage:
+    """Normalized token usage from provider-specific response metadata."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+    @property
+    def total_tokens(self) -> int:
+        return self.input_tokens + self.output_tokens
+
+
+@dataclass(frozen=True)
+class ProviderCallResult[ResponseModelT: BaseModel]:
+    """Validated response plus optional provider token usage."""
+
+    response: ResponseModelT
+    usage: TokenUsage = TokenUsage()
+
 
 # Approximate cost per 1K tokens (USD). Updated in Phase 14 for exact pricing.
 _COST_PER_1K: dict[str, dict[str, float]] = {
@@ -94,24 +116,29 @@ class ModelRouter:
         start = time.monotonic()
 
         if provider == "anthropic":
-            result = self._call_anthropic(messages, response_model, model, max_tokens, temperature)
+            provider_result = self._call_anthropic(
+                messages, response_model, model, max_tokens, temperature
+            )
         elif provider == "openai":
-            result = self._call_openai(
+            provider_result = self._call_openai(
                 messages, response_model, model, max_tokens, temperature, seed
             )
         elif provider == "ollama":
-            result = self._call_ollama(messages, response_model, model, max_tokens, temperature)
+            provider_result = self._call_ollama(
+                messages, response_model, model, max_tokens, temperature
+            )
         else:
             raise ValueError(f"Unknown provider: {provider!r}")
 
         duration_ms = (time.monotonic() - start) * 1000
+        result, usage = _coerce_provider_call_result(provider_result)
         self._append_cost_log(
             job_id=job_id,
             agent_id=agent_id,
             provider=provider,
             model=model,
-            input_tokens=0,
-            output_tokens=0,
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
             duration_ms=duration_ms,
         )
         return result
@@ -125,7 +152,7 @@ class ModelRouter:
         model: str,
         max_tokens: int,
         temperature: float,
-    ) -> ResponseT:
+    ) -> ProviderCallResult[ResponseT]:
         try:
             import anthropic as _anthropic  # noqa: PLC0415
             import instructor  # noqa: PLC0415
@@ -152,7 +179,19 @@ class ModelRouter:
         if system_text:
             kwargs["system"] = system_text
 
-        return client.messages.create(**kwargs)  # type: ignore[no-any-return]
+        messages_api = client.messages
+        if hasattr(messages_api, "create_with_completion"):
+            result_model, completion = messages_api.create_with_completion(**kwargs)
+            return ProviderCallResult(
+                response=cast(ResponseT, result_model),
+                usage=_extract_token_usage(completion),
+            )
+
+        result_model = messages_api.create(**kwargs)
+        return ProviderCallResult(
+            response=cast(ResponseT, result_model),
+            usage=_extract_token_usage(result_model),
+        )
 
     def _call_openai(
         self,
@@ -162,7 +201,7 @@ class ModelRouter:
         max_tokens: int,
         temperature: float,
         seed: int,
-    ) -> ResponseT:
+    ) -> ProviderCallResult[ResponseT]:
         try:
             import instructor  # noqa: PLC0415
             from openai import OpenAI  # noqa: PLC0415
@@ -175,13 +214,26 @@ class ModelRouter:
 
         client = instructor.from_openai(OpenAI(api_key=api_key))
 
-        return client.chat.completions.create(
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            seed=seed,
-            messages=messages,  # type: ignore[arg-type]
-            response_model=response_model,
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "seed": seed,
+            "messages": messages,
+            "response_model": response_model,
+        }
+        completions_api = client.chat.completions
+        if hasattr(completions_api, "create_with_completion"):
+            result_model, completion = completions_api.create_with_completion(**kwargs)
+            return ProviderCallResult(
+                response=cast(ResponseT, result_model),
+                usage=_extract_token_usage(completion),
+            )
+
+        result_model = completions_api.create(**kwargs)
+        return ProviderCallResult(
+            response=cast(ResponseT, result_model),
+            usage=_extract_token_usage(result_model),
         )
 
     def _call_ollama(
@@ -191,7 +243,7 @@ class ModelRouter:
         model: str,
         max_tokens: int,
         temperature: float,
-    ) -> ResponseT:
+    ) -> ProviderCallResult[ResponseT]:
         try:
             import instructor  # noqa: PLC0415
             from openai import OpenAI  # noqa: PLC0415
@@ -200,8 +252,8 @@ class ModelRouter:
 
         cfg = self._config.get("providers", {}).get("ollama", {})
         base_url_env = cfg.get("base_url_env", "OLLAMA_HOST")
-        base_url = os.environ.get(
-            base_url_env, cfg.get("base_url_default", "http://localhost:11434")
+        base_url = str(
+            os.environ.get(base_url_env) or cfg.get("base_url_default", "http://localhost:11434")
         )
         if not base_url.endswith("/v1"):
             base_url = base_url.rstrip("/") + "/v1"
@@ -211,12 +263,25 @@ class ModelRouter:
             mode=instructor.Mode.JSON,
         )
 
-        return client.chat.completions.create(
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            messages=messages,  # type: ignore[arg-type]
-            response_model=response_model,
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "messages": messages,
+            "response_model": response_model,
+        }
+        completions_api = client.chat.completions
+        if hasattr(completions_api, "create_with_completion"):
+            result_model, completion = completions_api.create_with_completion(**kwargs)
+            return ProviderCallResult(
+                response=cast(ResponseT, result_model),
+                usage=_extract_token_usage(completion),
+            )
+
+        result_model = completions_api.create(**kwargs)
+        return ProviderCallResult(
+            response=cast(ResponseT, result_model),
+            usage=_extract_token_usage(result_model),
         )
 
     # ── Cost logging ──────────────────────────────────────────────────────────
@@ -246,6 +311,7 @@ class ModelRouter:
             "model": model,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
+            "total_tokens": input_tokens + output_tokens,
             "cost_usd": round(cost_usd, 8),
             "duration_ms": round(duration_ms, 1),
             "timestamp": datetime.datetime.now(datetime.UTC).isoformat(),
@@ -256,3 +322,68 @@ class ModelRouter:
                 fh.write(json.dumps(entry) + "\n")
         except OSError as exc:
             logger.warning("Cost log write failed (non-fatal): %s", exc)
+
+
+def _coerce_provider_call_result[ResponseModelT: BaseModel](
+    value: ResponseModelT | ProviderCallResult[ResponseModelT] | tuple[ResponseModelT, Any],
+) -> tuple[ResponseModelT, TokenUsage]:
+    """Return validated model and token usage, tolerating old direct model returns."""
+    if isinstance(value, ProviderCallResult):
+        return value.response, value.usage
+    if isinstance(value, tuple) and len(value) >= 2:
+        return value[0], _extract_token_usage(value[1])
+    return value, _extract_token_usage(value)
+
+
+def _extract_token_usage(response: Any) -> TokenUsage:
+    """Normalize OpenAI/Anthropic usage metadata to input/output counts.
+
+    OpenAI exposes ``prompt_tokens`` / ``completion_tokens``. Anthropic exposes
+    ``input_tokens`` / ``output_tokens`` and may also expose cached-token fields.
+    Missing metadata is expected in tests, local providers, and older Instructor
+    versions; those cases fall back to zeros.
+    """
+    if response is None:
+        return TokenUsage()
+    if isinstance(response, TokenUsage):
+        return response
+    if isinstance(response, ProviderCallResult):
+        return response.usage
+    if isinstance(response, tuple) and len(response) >= 2:
+        return _extract_token_usage(response[1])
+
+    usage = _read_field(response, "usage") or response
+    input_tokens = _first_int_field(usage, ("input_tokens", "prompt_tokens"))
+    output_tokens = _first_int_field(usage, ("output_tokens", "completion_tokens"))
+    cached_input_tokens = sum(
+        _read_int_field(usage, field)
+        for field in ("cache_creation_input_tokens", "cache_read_input_tokens")
+    )
+    return TokenUsage(
+        input_tokens=max(0, input_tokens + cached_input_tokens),
+        output_tokens=max(0, output_tokens),
+    )
+
+
+def _first_int_field(source: Any, names: tuple[str, ...]) -> int:
+    for name in names:
+        value = _read_int_field(source, name)
+        if value:
+            return value
+    return 0
+
+
+def _read_int_field(source: Any, name: str) -> int:
+    value = _read_field(source, name)
+    if isinstance(value, bool) or value is None:
+        return 0
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _read_field(source: Any, name: str) -> Any:
+    if isinstance(source, dict):
+        return source.get(name)
+    return getattr(source, name, None)

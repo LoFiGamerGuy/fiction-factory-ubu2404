@@ -1,0 +1,103 @@
+series_id: cedar-harbor-romance
+series_title: Cedar Harbor Romances
+series_status: production_scaffold
+series_positioning: >
+  Contemporary small-town coastal romance focused on practical heroines,
+  emotionally accountable heroes, community restoration stakes, and earned HEA endings.
+author_profile: default
+genre_module: romance_module_v1
+sensitivity_profile: default
+goal_profile: kdp_commercial
+audience_profile: romance_reader
+
+runtime_defaults:
+  model_tier: test
+  llm_provider: openai
+  managed_agent_mode: false
+  seed: 1842
+
+books:
+  - book_id: book01
+    title: The Renovation Pact
+    series_position: 1
+    word_count_target: 65000
+    chapter_count: 25
+    scenes_per_chapter: 2
+    status: production_scaffold
+
+genre_config:
+  genre_name: romance
+  genre_module_status: validated
+  hea_required: true
+  heat_curve: rising
+  heat_curve_waypoints:
+    - [0.0, 1]
+    - [0.25, 2]
+    - [0.55, 3]
+    - [0.80, 3]
+    - [1.0, 2]
+  heat_level_target: sensual
+  tonal_mode_default: warm_witty_grounded
+  word_count_target: 65000
+  chapter_count: 25
+  scenes_per_chapter: 2
+  scene_function_vocabulary:
+    - meet_cute
+    - setup_tension
+    - inciting_romantic_conflict
+    - character_establishment
+    - forced_proximity
+    - first_charged_moment
+    - subplot_complication
+    - backstory_reveal
+    - emotional_revelation
+    - first_kiss
+    - midpoint_emotional_peak
+    - intimacy_escalation
+    - dark_moment
+    - black_moment
+    - grand_gesture
+    - hea_resolution
+  required_scene_slots:
+    - meet_cute
+    - inciting_romantic_conflict
+    - midpoint_emotional_peak
+    - black_moment
+    - grand_gesture
+    - HEA_or_HFN
+  reader_contract:
+    - romantic_tension_opens_in_chapter_1
+    - no_cheating
+    - consent_arc_present
+    - community_stakes_resolve_with_relationship_stakes
+    - hea_ending_required
+  trope_commitments:
+    - trope_id: second_chance_adjacent
+      description: Former almost-something partners with unfinished emotional business.
+    - trope_id: forced_proximity
+      description: Heritage-board deadline forces shared renovation work in the lighthouse inn.
+    - trope_id: found_family
+      description: Harbor business owners become active support network and pressure source.
+  quality_targets:
+    interiority_pct_target: 0.22
+    dialogue_ratio_target: 0.38
+    sensory_density_per_1k_min: 8.0
+    ai_tell_density_per_1k_max: 2.0
+    no_fly_violations_max: 0
+
+sensitivity_overrides:
+  audience_markers:
+    - adult_romance
+  hard_thresholds:
+    max_heat_level: 3
+    max_violence_intensity: 2
+  content_notes:
+    - Adult romance with sensual heat and on-page kissing/intimacy escalation.
+    - No sexual content involving minors.
+    - No graphic violence.
+
+series_bible_seed:
+  setting: Cedar Harbor, Maine, a working waterfront town balancing tourism and year-round locals.
+  anchor_location: The Beacon House, a storm-damaged lighthouse keeper's inn.
+  recurring_theme: Love becomes credible when promises survive practical pressure.
+  continuity_rule: The harbor calendar, restoration deadlines, and town meeting votes must remain consistent across books.

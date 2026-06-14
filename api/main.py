@@ -5,10 +5,12 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import json
+import os
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any, Literal
 
+import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse  # noqa: F401 — kept for type completeness
 from sse_starlette.sse import EventSourceResponse
@@ -39,16 +41,80 @@ def _read_jsonl(path: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _book_summary_candidates(book_id: str) -> list[Path]:
+    """Return likely book_run_summary.json paths for dashboard data-root layouts."""
+    data_root = _data_root()
+    candidates = [
+        data_root / book_id / "book_run_summary.json",
+        data_root / "books" / book_id / "book_run_summary.json",
+        data_root / "data" / "books" / book_id / "book_run_summary.json",
+    ]
+    for base in (data_root, data_root.parent):
+        series_root = base / "series"
+        if not series_root.exists():
+            continue
+        candidates.extend(
+            series_dir / "data" / "books" / book_id / "book_run_summary.json"
+            for series_dir in sorted(series_root.iterdir())
+            if series_dir.is_dir()
+        )
+
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for candidate in candidates:
+        if candidate not in seen:
+            seen.add(candidate)
+            unique.append(candidate)
+    return unique
+
+
 def _data_root() -> Path:
     """Return the ledger data root; tests may override app.state.data_root."""
     configured = getattr(app.state, "data_root", None)
     if configured is None:
-        return Path("data")
+        return Path(os.environ.get("FF_DASHBOARD_DATA_ROOT", "data"))
     return Path(configured)
 
 
 def _run_dir(run_id: str) -> Path:
     return _data_root() / run_id
+
+
+def _group_by_field(rows: list[dict[str, Any]], field: str) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        value = str(row.get(field, "unknown"))
+        grouped.setdefault(value, []).append(row)
+    return grouped
+
+
+def _dedupe_events(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen: set[str] = set()
+    result: list[dict[str, Any]] = []
+    for index, row in enumerate(rows):
+        key = str(row.get("event_id") or f"row-{index}-{json.dumps(row, sort_keys=True)}")
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(row)
+    return result
+
+
+def _voice_profile_candidates(series_id: str) -> list[Path]:
+    data_root = _data_root()
+    candidates = [
+        data_root / series_id / "profiles" / "voice_profile.yaml",
+        data_root / "series" / series_id / "profiles" / "voice_profile.yaml",
+        data_root.parent / "series" / series_id / "profiles" / "voice_profile.yaml",
+    ]
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        unique.append(candidate)
+    return unique
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -113,6 +179,67 @@ async def get_ledgers(book_id: str) -> dict[str, Any]:
         manager.close()
 
 
+@app.get("/books/{book_id}/summary")
+async def get_book_summary(book_id: str) -> dict[str, Any]:
+    """Return book_run_summary.json for *book_id* when available."""
+    for summary_path in _book_summary_candidates(book_id):
+        if not summary_path.exists():
+            continue
+        loaded = json.loads(summary_path.read_text(encoding="utf-8"))
+        if not isinstance(loaded, dict):
+            raise HTTPException(
+                status_code=500,
+                detail=f"Invalid book_run_summary.json at {summary_path}",
+            )
+        result: dict[str, Any] = dict(loaded)
+        result.setdefault("book_id", book_id)
+        result.setdefault("summary_path", str(summary_path))
+        result.setdefault("word_budget_status", {"enabled": False})
+        result["summary_found"] = True
+        return result
+    return {
+        "book_id": book_id,
+        "summary_found": False,
+        "word_budget_status": {"enabled": False},
+    }
+
+
+@app.get("/books/{book_id}/promises")
+async def get_book_promises(book_id: str) -> dict[str, Any]:
+    """Return within-book PromiseLedger events grouped by promise_id."""
+    db_path = _data_root() / book_id / "promise.db"
+    if not db_path.exists():
+        return {"book_id": book_id, "promises": {}}
+
+    from pipeline.ledgers.promise_ledger import PromiseLedger  # noqa: PLC0415
+
+    ledger = PromiseLedger(book_id, data_root=_data_root())
+    try:
+        rows = ledger._all_payloads()
+    finally:
+        ledger.close()
+    return {"book_id": book_id, "promises": _group_by_field(rows, "promise_id")}
+
+
+@app.get("/books/{book_id}/intimacy")
+async def get_book_intimacy(book_id: str) -> dict[str, Any]:
+    """Return IntimacyEscalationLedger events for timeline display."""
+    db_path = _data_root() / book_id / "intimacy_escalation.db"
+    if not db_path.exists():
+        return {"book_id": book_id, "events": []}
+
+    from pipeline.ledgers.intimacy_escalation_ledger import (  # noqa: PLC0415
+        IntimacyEscalationLedger,
+    )
+
+    ledger = IntimacyEscalationLedger(book_id, data_root=_data_root())
+    try:
+        rows = ledger._all_payloads()
+    finally:
+        ledger.close()
+    return {"book_id": book_id, "events": rows}
+
+
 @app.get("/books/{book_id}/metrics/history")
 async def get_metrics_history(
     book_id: str,
@@ -147,11 +274,43 @@ async def get_character_metrics(book_id: str, char_id: str) -> dict[str, Any]:
 async def get_series_promises(series_id: str) -> dict[str, list[dict[str, Any]]]:
     """Return series promise events grouped by promise_id."""
     rows = _read_jsonl(_data_root() / series_id / "series_promises.jsonl")
-    grouped: dict[str, list[dict[str, Any]]] = {}
-    for row in rows:
-        promise_id = str(row.get("promise_id", "unknown"))
-        grouped.setdefault(promise_id, []).append(row)
-    return grouped
+    db_path = _data_root() / "series" / series_id / "series_promises.db"
+    if db_path.exists():
+        from pipeline.ledgers.series_promise_ledger import SeriesPromiseLedger  # noqa: PLC0415
+
+        ledger = SeriesPromiseLedger(series_id, data_root=_data_root())
+        try:
+            rows.extend(ledger._all_payloads())
+        finally:
+            ledger.close()
+    return _group_by_field(_dedupe_events(rows), "promise_id")
+
+
+@app.get("/series/{series_id}/voice_calibration")
+async def get_voice_calibration(series_id: str) -> dict[str, Any]:
+    """Return voice profile calibration history for *series_id* when present."""
+    for profile_path in _voice_profile_candidates(series_id):
+        if not profile_path.exists():
+            continue
+        loaded = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
+        if not isinstance(loaded, dict):
+            raise HTTPException(
+                status_code=500,
+                detail=f"Invalid voice_profile.yaml at {profile_path}",
+            )
+        raw: dict[str, Any] = {str(key): value for key, value in loaded.items()}
+        history_raw = raw.get("calibration_history", [])
+        history = history_raw if isinstance(history_raw, list) else []
+        return {
+            "series_id": series_id,
+            "profile_found": True,
+            "profile_path": str(profile_path),
+            "profile_id": raw.get("profile_id"),
+            "version": raw.get("version"),
+            "display_name": raw.get("display_name"),
+            "calibration_history": history,
+        }
+    return {"series_id": series_id, "profile_found": False, "calibration_history": []}
 
 
 @app.get("/series/{series_id}/evoskill")

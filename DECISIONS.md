@@ -252,11 +252,109 @@ Items explicitly deferred to V2. Do not implement in V1.
 
 ## Section 4: Task 011–015 Decisions
 
+### T014-019 — First Production Scaffold and Scene-Brief Inventory Contract
+**Date:** 2026-06-14
+**Statement:** The first production-ready full-length scaffold is `data/series/cedar-harbor-romance/`, with series spec, book spec, run config, bible/facts, character sheets, local voice profile, and a generated 50-scene inventory for `book01` (`The Renovation Pact`). `BookStructurePlanner` now preserves optional per-scene outline fields from book specs: `scene_brief`, per-scene `scene_function`, `word_count_target`, `heat_level_target`, and `required_slot_id`. The orchestrator uses `SceneSlot.scene_brief` when launching scene jobs, so authored beat sheets feed the WriterAgent instead of falling back to generic prompts.
+**Rationale:** Turn 9 needs an author-approved full-length book input. A scaffold that validates but discards its detailed scene plan would produce generic scenes and waste model spend. Carrying scene briefs into the inventory keeps the existing planner thin while making production specs useful for real generation.
+**Supersedes:** Generic orchestrator scene brief fallback as the only source of scene-level drafting instructions.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T013-009 — Dashboard Runtime Data Root Contract
+**Date:** 2026-06-11
+**Statement:** The Author Dashboard backend reads generated run artifacts from `FF_DASHBOARD_DATA_ROOT`, with `app.state.data_root` still taking precedence in tests. `make dashboard` now exposes this as `DASHBOARD_DATA_ROOT` and accepts optional `DASHBOARD_RUN_ID`, `DASHBOARD_BOOK_ID`, `DASHBOARD_SERIES_ID`, and `DASHBOARD_CHARACTER_IDS` values to prefill the React selectors.
+**Rationale:** Dashboard dogfooding against generated acceptance runs needs a runtime way to point FastAPI and the React shell at a gitignored run directory. Previously only tests could override `app.state.data_root`, which made the documented budgeted novella workflow impossible to run through `make dashboard` without code changes.
+**Supersedes:** Test-only dashboard data-root override as the only data-root selection mechanism.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T013-008 — Dashboard Historical Views Completed
+**Date:** 2026-06-11
+**Statement:** The Author Dashboard now includes read-only historical cards for book promises, intimacy escalation, series promises, promoted EvoSkill skills, and voice calibration history. The API exposes narrow local endpoints for existing artifacts: `GET /books/{book_id}/promises`, `GET /books/{book_id}/intimacy`, SQLite-backed `GET /series/{series_id}/promises`, and `GET /series/{series_id}/voice_calibration`. The existing `GET /series/{series_id}/evoskill` endpoint drives the Skill Library card.
+**Rationale:** Phase 13 needed the remaining useful historical views without redesigning the dashboard shell. The cards reuse existing SQLite ledgers, run-local markdown skills, and voice profile YAML rather than creating a new dashboard data model. This keeps dashboard history aligned with the append-only local data architecture and preserves test-tier/default development posture.
+**Supersedes:** Nothing — completes the Phase 13 historical view surface started by T013-005 and extended by T013-007.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T013-007 — Dashboard Word-Budget Summary Card
+**Date:** 2026-06-11
+**Statement:** The Author Dashboard now exposes `book_run_summary.json` through `GET /books/{book_id}/summary` and renders `word_budget_status` in a Word Budget card. The card shows book target, planned scene-target total, actual words, remaining word budget, projected final count, minimum scene target, latest adjusted scene target, and the per-scene controller trace when present. The API resolves summaries from both direct dashboard data roots and generated acceptance-run `series/*/data/books/{book_id}/book_run_summary.json` paths.
+**Rationale:** Adaptive word-budget control is now a core author-facing production signal. Surfacing it from the durable summary avoids recomputing verifier/controller state from ledgers and lets the dashboard show drift during polling and after completed book runs without touching `model_router.json` or triggering live generation.
+**Supersedes:** Nothing — extends Phase 13 dashboard visibility for T014-017/T014-018 artifacts.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-018 — Budgeted Production-Tier Novella Acceptance Passed
+**Date:** 2026-06-11
+**Statement:** With explicit user approval, the live budgeted production-tier novella run completed using `make book-acceptance BOOK_ACCEPTANCE_ARGS="--fixture novella --model-tier production --provider anthropic --run-id production-tier-novella-budgeted --force"`. The run completed 12/12 scenes, reached 12/12 GO decisions, had no force-resolved scenes, passed deterministic corpus eval, passed strict `BookStructuralVerifier`, and passed draft acceptance. Final word count was 4614 against the 4600-word controller target. `word_budget_status` records the original 5400-word planned scene-target total, 4600-word book target, adjusted scene targets from 383 to 403 words, and final projection 4614.
+**Rationale:** This validates the adaptive controller on the exact production-tier failure mode from T014-015. The prior production-tier novella produced 5464 words and failed strict final verification. The budgeted production run reduced final count by 850 words, moved strict verification from FAIL to PASS, reduced tokens from 45143 to 33579, reduced estimated cost from `$0.331653` to `$0.240705`, and preserved strong deterministic eval averages (`VoiceConsistencyMetric` 0.9517, `AITellMetric` 0.9167). `model_router.json` remains unchanged and defaulted to `test`.
+**Supersedes:** The unbudgeted production-tier novella failure as the current production-tier acceptance baseline.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-017 — Adaptive Book-Level Word-Budget Control
+**Date:** 2026-06-11
+**Statement:** Book acceptance runs now enable `WordBudgetController` through `BookRunner.run_book(word_budget_target=...)`. The controller redistributes the verifier-level book target across remaining scenes after each actual scene word count is known, records planned target, actual words so far, remaining scenes, projected final count, and per-scene adjusted target, and floors adjusted scene targets at 250 words. `book_run_summary.json` includes `word_budget_status` with the full per-scene trace. Draft acceptance and strict final verification remain separate and unchanged.
+**Rationale:** The production-tier novella generated a useful rich draft but overran the strict final word-count gate because every scene kept receiving a fixed 450-word prompt. A book-level feedback loop preserves rich drafting while reducing the chance that production-tier prose drifts beyond final verifier tolerance.
+**Supersedes:** Fixed per-scene acceptance prompt targets with no mid-run book-budget feedback.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
 ### T014-016 — Draft Acceptance Separate From Final Verification
 **Date:** 2026-06-11
 **Statement:** `scripts/run_book_acceptance.py` now defaults to `--acceptance-mode draft`, writing a separate `draft_acceptance_status` block with explicit draft surplus accounting: `target_word_count`, `actual_word_count`, `surplus_words`, `surplus_pct`, `draft_surplus_allowed_pct`, and `within_draft_surplus`. Draft acceptance passes only when all scenes complete, no scenes fail, no scenes are force-resolved, deterministic corpus eval passes, dashboard API checks pass if present, and the draft is within the configured surplus ceiling. The default ceiling is +25%. `--acceptance-mode final` preserves the strict prior behavior, and `verifier_status` remains unchanged as the publish-ready structural gate.
 **Rationale:** Production-tier novella generation produced a complete, clean draft but exceeded the strict final word-count verifier by 404 words over the upper final tolerance. That should be classified as useful editable surplus, not a draft failure, while keeping BookStructuralVerifier strict for final manuscripts. The existing 5464-word production novella is now interpreted as `draft_surplus` (+18.78% over target, within +25%) and still fails final verification.
 **Supersedes:** The top-level acceptance interpretation in T014-015 that treated every BookStructuralVerifier word-count failure as an overall draft failure.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-015 — Production-Tier Novella Comparison Completed
+**Date:** 2026-06-11
+**Statement:** A live production-tier novella run completed using `make book-acceptance BOOK_ACCEPTANCE_ARGS="--fixture novella --model-tier production --provider anthropic --run-id production-tier-novella-local --force"`: 12/12 scenes completed, 12/12 GO decisions, no force-resolved scenes, deterministic corpus eval PASS, and dashboard API checks PASS. Overall acceptance remained false because BookStructuralVerifier rejected word count: 5464 words against target 4600 with tolerance [4140–5060]. The comparable test-tier novella run remains the accepted baseline: 4702 words, verifier PASS, 189.463 seconds, 23545 tokens, `$0.0092049`. Production took 304.54 seconds, 45143 tokens, and `$0.331653`.
+**Rationale:** The production-tier model produced stronger deterministic voice and AI-tell scores on average and a more concrete prose sample, but it overran the structural word budget. Production-tier novella generation is operational, but not yet a better acceptance baseline until word-budget control is tightened. `model_router.json` remains defaulted to `test`; production-tier runs remain explicit only.
+**Supersedes:** Unverified full-book/novella production-tier comparison.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T012-005 — EvoSkill Nightly Closure on Live Novella Traces
+**Date:** 2026-06-11
+**Statement:** Three local `scripts/evoskill_nightly.py` passes were run over the live novella trace corpus at `data/book_acceptance/test-tier-novella-local/data`. Each pass found 12 `failure/quality_gate_fail` traces for `book-acceptance-series`, proposed a local mock skill, passed evaluation (`score=0.700`, `baseline=0.500`, `improvement=0.200`), kept it on the frontier, and promoted it. Result: 3 local skill markdown files and 3 matching run-local WUPHF wiki mirror pages under `series-bible/book-acceptance-series/editorial-guidelines/`.
+**Rationale:** This proves learning-loop closure on real full-book/novella traces: scene execution writes traces, nightly reads them, proposer/evaluator/frontier accepts skills, and promotion reaches both local data and WUPHF wiki mirror paths. The live novella run had no revised-then-GO scenes; that path remains covered by regression test `test_job_runner_trace_marks_revised_go_as_failure`.
+**Supersedes:** Earlier fixture-only EvoSkill nightly closure.
+**Runbook:** `runbooks/evoskill-setup.md`
+
+### T014-014 — Live Test-Tier Novella Acceptance Passed
+**Date:** 2026-06-11
+**Statement:** `scripts/run_book_acceptance.py` now supports `--fixture novella`, a 12-scene Romance Module fixture with a 3/6/3 act split and distinct book ID `book-acceptance-romance-novella-01`. The first live test-tier novella run passed using `make book-acceptance BOOK_ACCEPTANCE_ARGS="--fixture novella --model-tier test --provider openai --run-id test-tier-novella-local --force"`: 12/12 scenes completed, 12/12 GO decisions, no force-resolved scenes, manuscript word count 4702, deterministic corpus eval PASS, BookStructuralVerifier PASS, dashboard API checks PASS, and cost summary recorded 23 calls / 23545 tokens / `$0.0092049` estimated cost.
+**Rationale:** This validates the full-book runner beyond the 8-scene short-book fixture and proves author-facing artifacts are readable through the dashboard API. The run also confirms real token/cost accounting is usable for later test-tier vs production-tier comparisons.
+**Supersedes:** Short-book-only live acceptance as the longest repeatable generation workflow.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-013 — Real Token Accounting and Run-Local Files API IDs
+**Date:** 2026-06-10
+**Statement:** `ModelRouter` now captures provider token usage when available: OpenAI `prompt_tokens`/`completion_tokens`, Anthropic `input_tokens`/`output_tokens`, and Anthropic cache input tokens. `cost_log.jsonl` entries include `input_tokens`, `output_tokens`, `total_tokens`, and `cost_usd`, with zero-token fallback when usage metadata is missing. `BookRunner.write_book_run_summary()` aggregates the run-local cost log into `cost_summary`. Claude Files API uploads are opt-in at book-run setup; returned file IDs for series bible, voice profile, and character sheets are stored under the run-local data root and mirrored into `book_run_summary.json` through `ManagedAgentConfig`.
+**Rationale:** Test-tier vs production-tier comparisons need real token and cost totals, not zero placeholders. Long-context assets also need a lifecycle that reduces context bloat without writing provider IDs into source files or requiring live secrets in tests.
+**Supersedes:** The cost-comparison deferral in T014-008 caused by zero token accounting.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-012 — First Live Short-Book Acceptance Passed
+**Date:** 2026-06-10
+**Statement:** The first live test-tier short-book acceptance run passed using `make book-acceptance BOOK_ACCEPTANCE_ARGS="--model-tier test --provider openai --run-id test-tier-short-book-local"`. The run generated 8/8 scenes through `JobRunner`, reached 8/8 GO decisions, produced `manuscript.md` and `book_run_summary.json`, passed deterministic corpus eval over all 8 scenes, and passed BookStructuralVerifier. The short-book verifier target is calibrated to `SHORT_BOOK_WORD_COUNT_TARGET = 3300` for the 8-scene edited-output fixture.
+**Rationale:** This establishes repeatable short-book generation beyond Phase 14's three-scene acceptance. The calibrated verifier target reflects actual edited-output length without tuning generated prose, and keeps the structural gate useful for the short fixture.
+**Supersedes:** Unverified short-book acceptance workflow from T014-009 through T014-011.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-011 — Book Runner Resume and Force Contract
+**Date:** 2026-06-10
+**Statement:** `BookRunner.run_book()` resumes by default. If a scene's latest status is successful and its finalized scene file exists, the runner appends a `skipped` status using the prior checkpoint thread ID and does not rerun that scene. The first failed or incomplete scene is rerun, and later scenes continue in order. `force=True` intentionally regenerates all scenes and resets the status JSONL by default. `book_run_summary.json` includes `previous_failed_scene_ids` and `checkpoint_thread_ids` for the current run.
+**Rationale:** Repeatable full-book generation must be idempotent. A second invocation after a mid-book failure should not spend tokens rewriting completed scenes, but authors still need failed scene history and a deliberate force path for regeneration.
+**Supersedes:** Status-only resume foundation from T014-009.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-010 — Ordered Manuscript and Book Summary Contract
+**Date:** 2026-06-10
+**Statement:** `BookRunner.assemble_manuscript()` assembles finalized scene files in supplied fixture or `SceneInventory` order into `manuscript.md` with deterministic book/chapter/scene headings. `BookRunner.write_book_run_summary()` writes `book_run_summary.json` with run metadata, provider, scene statuses, total word count, GO/force-resolved/failed counts, failed scene IDs, manuscript path, scene directory, ledger dashboard summary, and optional eval/verifier status blocks.
+**Rationale:** Repeatable full-book generation needs a stable artifact contract beyond per-scene files. Ordered assembly catches missing scene outputs immediately, and the summary gives dashboard, eval, verifier, and future resume flows one durable local source of truth.
+**Supersedes:** Turn 1's status-only short-book acceptance output.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-009 — Short-Book Acceptance Runner
+**Date:** 2026-06-10
+**Statement:** `pipeline/book_runner.py` provides the first reusable ordered book runner over the existing `JobRunner` scene path, with per-scene JSONL status records for future resume support. `scripts/run_book_acceptance.py` runs an eight-scene Romance Module fixture under `data/book_acceptance/`, defaults to `test`, and writes a run-local `model_router.run.json` for any explicit tier selection.
+**Rationale:** Phase 14 proved repeatable scene generation; full-book generation needs the same scene path executed in order with durable status after each scene. The runner records enough scene-level state to resume or audit later without mutating `model_router.json` or requiring live model calls in automated tests.
+**Supersedes:** Manual one-scene or three-scene-only acceptance as the highest repeatable generation workflow.
 **Runbook:** `docs/runbooks/full-book-generation.md`
 
 ### T014-008 — Production-Tier Acceptance Passed, Default Remains Test
