@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _MAX_SURGICAL_LOOPS = 3
+_SCENE_WORD_TARGET_MIN_RATIO = 0.90
 
 
 class _SurgicalEditOutput(BaseModel):
@@ -168,7 +169,17 @@ class EditorAgent(BaseAgent):
                 job_id=job_context.job_id,
                 agent_id="editor_agent",
             )
-            return result.edited_text or text
+            edited_text = result.edited_text or text
+            if _structural_edit_shrinks_below_minimum(
+                text, edited_text, issues_prompt, job_context
+            ):
+                logger.warning(
+                    "EditorAgent: rejected structural edit that shrank scene below minimum "
+                    "word count (scene=%s)",
+                    job_context.scene_id,
+                )
+                return text
+            return edited_text
         except Exception as exc:
             logger.warning("EditorAgent surgical edit failed (non-fatal): %s", exc)
             return text
@@ -241,3 +252,27 @@ class EditorAgent(BaseAgent):
             logger.debug("EditorAgent: saved memory (%d scenes)", existing["scenes_edited"])
         except Exception as exc:
             logger.warning("EditorAgent: failed to save memory: %s", exc)
+
+
+def _structural_edit_shrinks_below_minimum(
+    original_text: str,
+    edited_text: str,
+    issues_prompt: str,
+    job_context: JobContext,
+) -> bool:
+    if not issues_prompt.startswith("STRUCTURAL ISSUES TO ADDRESS"):
+        return False
+    minimum_words = _minimum_scene_word_count(job_context.word_count_target)
+    if minimum_words <= 0:
+        return False
+    return _word_count(original_text) >= minimum_words and _word_count(edited_text) < minimum_words
+
+
+def _minimum_scene_word_count(word_target: int) -> int:
+    if word_target <= 0:
+        return 0
+    return max(1, round(word_target * _SCENE_WORD_TARGET_MIN_RATIO))
+
+
+def _word_count(text: str) -> int:
+    return len(text.split()) if text else 0

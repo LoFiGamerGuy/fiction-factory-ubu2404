@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from pipeline.core.model_router import ModelRouter
 
 logger = logging.getLogger(__name__)
+_SCENE_WORD_TARGET_MIN_RATIO = 0.90
 
 
 class WriterAgent(BaseAgent):
@@ -71,6 +72,8 @@ class WriterAgent(BaseAgent):
             scene_brief=scene_brief,
             word_target=word_target,
             context_bundle_dict=context_bundle.as_tiers_dict(),
+            prior_feedback=_prior_quality_feedback(job_context),
+            previous_draft=_previous_scene_text(job_context),
         )
 
         output: WriterOutput = self._router.call(
@@ -78,15 +81,16 @@ class WriterAgent(BaseAgent):
             response_model=WriterOutput,
             provider=self.ctx.llm_provider,
             seed=job_context.seed,
-            max_tokens=max(word_target * 2, 2048),
+            max_tokens=max(word_target * 3, 2048),
             job_id=job_context.job_id,
             agent_id="writer_agent",
         )
 
-        if not output.word_count:
+        actual_word_count = _word_count(output.draft_text)
+        if output.word_count != actual_word_count or output.scene_id != job_context.scene_id:
             output = WriterOutput(
                 draft_text=output.draft_text,
-                word_count=len(output.draft_text.split()),
+                word_count=actual_word_count,
                 scene_id=job_context.scene_id,
             )
 
@@ -113,6 +117,8 @@ class WriterAgent(BaseAgent):
         scene_brief: str,
         word_target: int,
         context_bundle_dict: dict[str, Any],
+        prior_feedback: list[str] | None = None,
+        previous_draft: str = "",
     ) -> list[dict[str, str]]:
         series_ctx = context_bundle_dict.get("series", "")
         book_ctx = context_bundle_dict.get("book", "")
@@ -121,9 +127,38 @@ class WriterAgent(BaseAgent):
         system = (
             "You are a skilled fiction writer. "
             "Generate a raw, emotionally immediate scene draft following the brief exactly. "
-            "Return ONLY the scene prose — no commentary, no meta-text."
+            "The requested length is binding: develop beats fully instead of summarizing them. "
+            "Return ONLY one continuous scene prose draft — no commentary, no meta-text, "
+            "no Markdown separators, and no alternate versions."
         )
-        user_parts = [f"## Scene Brief\n{scene_brief}", f"Target length: {word_target} words"]
+        min_words = _minimum_scene_word_count(word_target)
+        user_parts = [
+            f"## Scene Brief\n{scene_brief}",
+            f"Target length: {word_target} words",
+            f"Minimum acceptable length: {min_words} words",
+            (
+                "Write a complete scene near the target length. Include concrete action, "
+                "dialogue, sensory grounding, and emotional turns; do not compress the scene "
+                "into a synopsis."
+            ),
+        ]
+        feedback = [item for item in (prior_feedback or []) if str(item).strip()]
+        if feedback:
+            user_parts.append(
+                "## Revision Feedback\n" + "\n".join(f"- {item}" for item in feedback)
+            )
+        if previous_draft.strip():
+            previous_words = _word_count(previous_draft)
+            needed_words = max(0, min_words - previous_words)
+            user_parts.append(
+                "## Previous Draft To Expand\n"
+                f"Previous draft actual length: {previous_words} words. "
+                f"Add at least {needed_words} words of concrete scene prose while revising.\n"
+                f"{previous_draft.strip()}\n\n"
+                "Revise and expand this draft to satisfy the target length while preserving "
+                "its continuity. Replace the draft with one complete version; do not append "
+                "a second version after a separator."
+            )
         if series_ctx:
             user_parts.append(f"## Series Context\n{series_ctx}")
         if book_ctx:
@@ -189,3 +224,29 @@ class WriterAgent(BaseAgent):
         memory["scenes_completed"] = memory.get("scenes_completed", 0) + 1
 
         self._save_memory(memory)
+
+
+def _minimum_scene_word_count(word_target: int) -> int:
+    if word_target <= 0:
+        return 0
+    return max(1, round(word_target * _SCENE_WORD_TARGET_MIN_RATIO))
+
+
+def _prior_quality_feedback(job_context: JobContext) -> list[str]:
+    quality_data = job_context.output_data.get("quality_agent", {})
+    notes = quality_data.get("notes", []) if isinstance(quality_data, dict) else []
+    return [str(note) for note in notes if str(note).strip()]
+
+
+def _previous_scene_text(job_context: JobContext) -> str:
+    editor_data = job_context.output_data.get("editor_agent", {})
+    if isinstance(editor_data, dict) and editor_data.get("edited_text"):
+        return str(editor_data["edited_text"])
+    writer_data = job_context.output_data.get("writer_agent", {})
+    if isinstance(writer_data, dict) and writer_data.get("draft_text"):
+        return str(writer_data["draft_text"])
+    return ""
+
+
+def _word_count(text: str) -> int:
+    return len(text.split()) if text else 0

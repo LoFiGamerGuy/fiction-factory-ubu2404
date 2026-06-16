@@ -318,7 +318,7 @@ def test_quality_agent_pass_rate_calculation(
     job_ctx1 = job_ctx1.with_output(
         "editor_agent",
         {
-            "edited_text": "Clean content. " * 50,
+            "edited_text": "Clean content. " * 500,
             "nofly_violations": 0,
             "structural_flags": 0,
             "is_clean": True,

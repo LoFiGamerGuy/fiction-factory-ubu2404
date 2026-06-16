@@ -235,6 +235,33 @@ class TestSceneStateMachineTransitions:
         machine.run(_make_initial_state())
         quality_mock.update_ledgers.assert_called_once()
 
+    def test_writer_exception_stops_before_editor_quality_and_final(self) -> None:
+        """LLM/provider failures must fail closed instead of continuing the graph."""
+        writer_mock = MagicMock()
+        writer_mock.run.side_effect = RuntimeError("insufficient_quota")
+        editor_mock = _make_mock_editor(clean=True)
+        quality_mock = _make_mock_quality(needs_review=False)
+        agents: dict[str, Any] = {
+            "writer_agent": writer_mock,
+            "editor_agent": editor_mock,
+            "quality_agent": quality_mock,
+        }
+        machine = SceneStateMachine(
+            agents=agents,
+            job_context_factory=_job_context_factory,
+            controller=ConvergenceController(max_revisions=1),
+        )
+
+        result = machine.run(_make_initial_state())
+
+        assert "insufficient_quota" in result["error"]
+        assert result["convergence_decision"] == ""
+        assert result["final_text"] == ""
+        assert result["force_resolved"] is False
+        editor_mock.run.assert_not_called()
+        quality_mock.run.assert_not_called()
+        quality_mock.update_ledgers.assert_not_called()
+
     def test_approved_go_commits_continuity_changes(self) -> None:
         """Approved scenes should call approval-time continuity persistence."""
         continuity_mock = MagicMock()

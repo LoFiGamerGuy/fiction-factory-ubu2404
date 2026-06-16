@@ -201,6 +201,12 @@ def make_final_node(agents: AgentRegistry, job_context_factory: Any) -> Any:
 # ── Routing edges ─────────────────────────────────────────────────────────────
 
 
+def _after_agent_node(state: SceneState) -> Literal["continue", "end"]:
+    if state.get("error"):
+        return "end"
+    return "continue"
+
+
 def _after_convergence(
     state: SceneState,
 ) -> Literal["writer_node", "final_node", "force_resolve_node"]:
@@ -245,10 +251,26 @@ class SceneStateMachine:
         builder.add_node("final_node", make_final_node(self._agents, self._factory))
 
         builder.set_entry_point("writer_node")
-        builder.add_edge("writer_node", "editor_node")
-        builder.add_edge("editor_node", "continuity_node")
-        builder.add_edge("continuity_node", "quality_node")
-        builder.add_edge("quality_node", "convergence_node")
+        builder.add_conditional_edges(
+            "writer_node",
+            _after_agent_node,
+            {"continue": "editor_node", "end": END},
+        )
+        builder.add_conditional_edges(
+            "editor_node",
+            _after_agent_node,
+            {"continue": "continuity_node", "end": END},
+        )
+        builder.add_conditional_edges(
+            "continuity_node",
+            _after_agent_node,
+            {"continue": "quality_node", "end": END},
+        )
+        builder.add_conditional_edges(
+            "quality_node",
+            _after_agent_node,
+            {"continue": "convergence_node", "end": END},
+        )
         builder.add_conditional_edges(
             "convergence_node",
             _after_convergence,

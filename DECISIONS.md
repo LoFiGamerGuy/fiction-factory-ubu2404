@@ -252,6 +252,83 @@ Items explicitly deferred to V2. Do not implement in V1.
 
 ## Section 4: Task 011–015 Decisions
 
+### T014-030 — Cedar Harbor Full Anthropic Test-Tier Book Passed
+**Date:** 2026-06-16
+**Statement:** The staged Anthropic test-tier run `cedar-harbor-book01-weighted-gate-anthropic --max-scenes 50` completed the full Cedar Harbor `book01` scaffold successfully. Final summary: `50/50` scenes completed, `50/50` GO decisions, `0` force-resolved scenes, deterministic eval PASS scoped to all 50 scene paths, dashboard summary PASS, strict `BookStructuralVerifier` PASS, and final manuscript word count `64982` against the 65000-word target.
+**Rationale:** This is the first full-length production scaffold to pass the unattended full-book runner end to end after the generation-time word-count, editor shrinkage, measured writer count, weighted structural-density, and fail-closed state-machine fixes. The run stayed on test tier, used Anthropic fallback after OpenAI quota exhaustion, kept `model_router.json` defaulted to `test`, and cost `$1.153952` total for the run (`534840` tokens). The user-approved additional `$5` cap was not approached; incremental spend after the prior `$0.4984488` stop was about `$0.6555032`.
+**Supersedes:** T014-029 as the latest Cedar Harbor weighted-gate proof status.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-029 — Anthropic Test-Tier Weighted-Gate Proof Passed
+**Date:** 2026-06-16
+**Statement:** The approved Anthropic test-tier continuation `cedar-harbor-book01-weighted-gate-anthropic --max-scenes 20` passed after the weighted structural-density and fail-closed state-machine fixes. Final summary: `20/20` selected scenes completed, `20/20` GO decisions, `0` force-resolved scenes, deterministic eval PASS scoped to exactly 20 selected scene paths, dashboard summary PASS, verifier skipped with `reason = "partial_run"`, and total assembled words `26441` against 26000 planned selected-scene words.
+**Rationale:** OpenAI quota exhaustion blocked the scoped retry after the weighted AI-tell gate fix. The Anthropic test-tier fallback validated the current runner/agent gates on the same Cedar Harbor scaffold without production tier. The run consumed `$0.4984488` of the approved `$0.50` live-spend cap, so staged continuation to 30/40/50 scenes is paused pending new explicit spend approval.
+**Supersedes:** OpenAI quota stop as the latest Cedar Harbor weighted-gate proof status.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-028 — Agent Node Exceptions Stop Scene Graph
+**Date:** 2026-06-16
+**Statement:** `SceneStateMachine` now routes any writer, editor, continuity, or quality node exception directly to graph end with `error` preserved. Downstream nodes do not run after an agent-node exception; ledgers are not updated; no final text or misleading GO/force-resolve artifact is produced from a failed provider call.
+**Rationale:** The approved Cedar Harbor forward-progress batch hit OpenAI `429 insufficient_quota` during the scoped retry run `cedar-harbor-book01-writer-count-ai-tell`. The state machine logged `writer_node failed`, but the graph's unconditional edges still allowed editor/quality/final handling to continue far enough to produce confusing status artifacts. Provider quota/API failures must fail closed immediately. Regression test: `test_writer_exception_stops_before_editor_quality_and_final`.
+**Supersedes:** Unconditional `writer_node -> editor_node -> continuity_node -> quality_node` progression after node exceptions.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-027 — Quality Gate Uses Weighted Structural Density
+**Date:** 2026-06-16
+**Statement:** `QualityAgent` now includes `EditorOutput.structural_weighted_score` in tier classification. A scene may route warn/GO only when both raw structural flag count and weighted structural density are within limits. The weighted limit is aligned with offline `AITellMetric`'s pass threshold: no more than roughly 5 weighted structural points per 1K words, with a floor of 5.
+**Rationale:** The approved 20-scene stage of `cedar-harbor-book01-writer-count` generated `20/20` GO and `0` force-resolved scenes, but deterministic eval failed because `ch08_sc02` had `AITellMetric=0.4215`. The live QualityAgent had allowed the scene because the raw flag count fit the length-aware count threshold, while offline eval uses weighted structural density. This was a gate-coverage mismatch, not a content-policy decision. The fix tightens live quality gating so eval-failing weighted AI-tell density is caught before GO.
+**Supersedes:** Raw structural flag count as the only structural AI-tell gate in `QualityAgent`.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-026 — Writer Word Count Is Measured, Not Trusted
+**Date:** 2026-06-16
+**Statement:** `WriterAgent` now always recomputes `WriterOutput.word_count` from `draft_text` and overwrites any model-reported count. Retry prompts also state the previous draft's actual word count and the minimum additional words required to satisfy the scene floor.
+**Rationale:** The approved fresh editor-guard proof `cedar-harbor-book01-editor-guard --max-scenes 10` validated the editor length guard for the prior `ch05_sc01` failure, but still failed with `ch03_sc02` force-resolved. Logs showed the model repeatedly reported drafts around 1318 words while the actual final prose was only 1008 words. The QualityAgent correctly failed on actual text length, but WriterAgent logs and memory were trusting the model's self-reported `word_count`, making the failure look like a quality false positive. Runtime word counts must be measured deterministically from text everywhere.
+**Supersedes:** Trusting LLM-provided `WriterOutput.word_count` when nonzero.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-025 — Editor Structural Edits Preserve Scene Minimum Length
+**Date:** 2026-06-15
+**Statement:** `EditorAgent` now rejects structural-only surgical edits that shrink an already-above-minimum draft below the per-scene 90% minimum word count. NoFly cleanup may still shrink below the minimum; that remains safer than preserving forbidden constructions and will route through the normal QualityAgent retry loop. `WriterAgent` retry prompts also explicitly prohibit Markdown separators and appended alternate versions.
+**Rationale:** The approved `cedar-harbor-book01-quality-tune --max-scenes 10` continuation resumed correctly and generated through 10 selected scenes, but failed with `ch05_sc01` force-resolved. The final writer draft was above target, then the editor returned `1165` words against a `1170` minimum and included an appended alternate-version separator (`---`). Structural analysis had only medium issues and would have warned under the length-aware threshold; the hard failure was editor-induced underlength by 5 words. The fix preserves the full-length writer draft when a structural edit violates the length contract, while retaining fail-closed handling for NoFly removals.
+**Supersedes:** Allowing structural surgical edits to reduce an adequate scene below the generation-time word-count floor.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-024 — Cedar Harbor Post-Threshold Partial Proof Passed
+**Date:** 2026-06-15
+**Statement:** The approved live test-tier Cedar Harbor proof `cedar-harbor-book01-quality-tune` passed after the length-aware structural quality threshold change. Final run summary: `3/3` selected scenes completed, `3/3` GO decisions, `0` force-resolved scenes, deterministic eval PASS scoped to exactly 3 selected scene paths, dashboard summary PASS, verifier skipped with `reason = "partial_run"`, and total assembled words `3795` against 3900 planned words.
+**Rationale:** This validates the T014-021/T014-023 fixes together: generation-time word-count enforcement produces production-scale scene lengths, force-resolved scenes remain unacceptable for unattended runs, partial eval no longer counts stale scene files, and medium-only structural flags no longer exhaust retries just because a scene is full-length. The first invocation timed out during scene 3; rerunning the same run ID resumed correctly and skipped completed scenes 1-2.
+**Supersedes:** The failed `cedar-harbor-book01-wordcount-fix` 3-scene proof as the current Cedar Harbor partial-run baseline.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-023 — Length-Aware Structural Quality Threshold
+**Date:** 2026-06-15
+**Statement:** `QualityAgent` now scales the structural warn threshold by scene length: floor `6` structural flags, then `ceil(6 flags per 1000 words)` for longer scenes. Medium-only structural flags above the old absolute threshold no longer force a scene into `needs_review` solely because the scene was expanded to the production word target.
+**Rationale:** The post word-count-fix Cedar Harbor 3-scene proof generated full-length scenes, but `ch01_sc02` force-resolved after reaching 1441 words because deterministic structural analysis found 7 medium flags. The previous absolute `structural <= 6` gate was calibrated for shorter scenes and became brittle once generation-time word-count enforcement worked. Scaling by scene length preserves fail-closed behavior for genuinely dense structural issues while avoiding false retry exhaustion for production-length scenes.
+**Supersedes:** Fixed absolute structural warn threshold for all scene lengths.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-022 — Partial Full-Book Eval Scoped To Selected Inventory
+**Date:** 2026-06-15
+**Statement:** `scripts/run_full_book.py` now evaluates only the selected `SceneInventory` scene output paths for `--max-scenes` proofs instead of globbing every scene file under the shared book scene directory. Stale scene files from earlier run IDs are ignored by the corpus eval summary.
+**Rationale:** The post-fix Cedar Harbor `--max-scenes 3` proof used a new run ID after a prior 50-scene run. Generation correctly attempted only three scenes, but eval initially reported `scene_count = 50` because it collected all existing `scenes/*.md` files. Partial proofs must validate only the artifact set they actually selected, or stale files can hide failures and distort dashboard/eval interpretation.
+**Supersedes:** Directory-glob eval for production full-book partial runs.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-021 — Generation-Time Word-Count Enforcement
+**Date:** 2026-06-15
+**Statement:** Scene generation now enforces a per-scene minimum word count at the quality gate: a finalized candidate below 90% of `JobContext.word_count_target` is marked `needs_review`, receives a `word_count_under_target` note, and routes through the existing REVISE loop. `WriterAgent` treats target length as binding, includes the minimum acceptable length in prompts, and uses prior quality notes plus the previous draft to produce expansion-focused retries. The production full-book runner also treats any force-resolved scene as a failed unattended run, even if files were produced.
+**Rationale:** The live Cedar Harbor 50-scene test-tier run completed operationally (50/50 scenes, eval/dashboard PASS) but failed strict verification at 22,996 words against a 65,000-word target. The inventory and `JobContext.word_count_target` values were correct; the missing guard was generation-time enforcement. Catching underlength scenes in `QualityAgent` prevents silent GO routing and surfaces retry exhaustion through force-resolution/failure instead of waiting for final `BookStructuralVerifier` to discover a manuscript-length miss.
+**Supersedes:** Prompt-only scene word targets and final-verifier-only underlength detection.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-020 — Unattended Production Full-Book Runner
+**Date:** 2026-06-14
+**Statement:** `scripts/run_full_book.py` and `make run-full-book` are the production full-book execution contract. The runner validates the series spec, loads or generates `scene_inventory.json`, writes a run-local `model_router.run.json`, instantiates `AgentContext`, `ModelRouter`, and `LedgerManager`, runs scenes through `BookRunner.run_inventory()` in inventory order, assembles `manuscript.md`, writes `book_run_summary.json`, and runs deterministic eval, strict verifier, and local dashboard summary checks when applicable. `--max-scenes` truncates only the in-memory inventory for spend-capped proofs; full-book verification is skipped for partial runs with `reason = "partial_run"`. Resume is scoped to the selected run ID through `data/books/{book_id}/runs/{run_id}/book_run_status.jsonl`; `--force` resets that run status and reruns selected scenes.
+**Rationale:** Production book generation should not require manually starting every scene through orchestrator `--job`. The existing `BookRunner.run_inventory()` already provides the correct ordered loop, resume, force, and summary behavior; the missing piece was a production CLI that wires committed series scaffolds into that loop without mutating `model_router.json` or requiring live API calls in tests. Generated production artifacts under committed series scaffolds are gitignored while specs and `scene_inventory.json` remain source-controlled.
+**Supersedes:** Manual per-scene orchestrator invocation as the production continuation path after scaffold approval.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
 ### T014-019 — First Production Scaffold and Scene-Brief Inventory Contract
 **Date:** 2026-06-14
 **Statement:** The first production-ready full-length scaffold is `data/series/cedar-harbor-romance/`, with series spec, book spec, run config, bible/facts, character sheets, local voice profile, and a generated 50-scene inventory for `book01` (`The Renovation Pact`). `BookStructurePlanner` now preserves optional per-scene outline fields from book specs: `scene_brief`, per-scene `scene_function`, `word_count_target`, `heat_level_target`, and `required_slot_id`. The orchestrator uses `SceneSlot.scene_brief` when launching scene jobs, so authored beat sheets feed the WriterAgent instead of falling back to generic prompts.

@@ -6,7 +6,7 @@ DASHBOARD_BOOK_ID ?= default
 DASHBOARD_SERIES_ID ?= default
 DASHBOARD_CHARACTER_IDS ?= sarah,miles
 
-.PHONY: install lint test validate-schemas eval phase14-acceptance book-acceptance run-pipeline dashboard hooks clean
+.PHONY: install lint test validate-schemas eval phase14-acceptance book-acceptance run-full-book run-pipeline dashboard hooks clean
 
 ## First-time setup: create venv, install all deps, install hooks
 install:
@@ -43,6 +43,10 @@ phase14-acceptance:
 ## Run short-book acceptance (pass BOOK_ACCEPTANCE_ARGS="--model-tier test")
 book-acceptance:
 	$(PYTHON) scripts/run_book_acceptance.py $(BOOK_ACCEPTANCE_ARGS)
+
+## Run a production full-book inventory (pass RUN_BOOK_ARGS="--config ...")
+run-full-book:
+	$(PYTHON) scripts/run_full_book.py $(RUN_BOOK_ARGS)
 
 ## Run the pipeline orchestrator CLI (pass ARGS="--help" etc.)
 run-pipeline:

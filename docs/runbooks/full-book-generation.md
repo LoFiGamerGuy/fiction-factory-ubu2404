@@ -36,6 +36,48 @@ Regenerate every scene intentionally with `--force`:
 make book-acceptance BOOK_ACCEPTANCE_ARGS="--run-id my-short-book --force --model-tier test --provider openai"
 ```
 
+## Production Full-Book Runner
+
+Use `make run-full-book` for committed production scaffolds. This is the unattended runner: it validates the series spec, loads or generates `scene_inventory.json`, builds a run-local `model_router.run.json`, runs scenes through `BookRunner.run_inventory()` in inventory order, assembles `manuscript.md`, writes `book_run_summary.json`, and then runs local eval/verifier/dashboard checks when applicable.
+
+Safe first proof for the Cedar Harbor scaffold:
+
+```bash
+make run-full-book RUN_BOOK_ARGS="\
+  --config data/series/cedar-harbor-romance/pipeline_config.json \
+  --series-id cedar-harbor-romance \
+  --book-id book01 \
+  --run-id cedar-harbor-book01-test \
+  --model-tier test \
+  --provider openai \
+  --max-scenes 3"
+```
+
+Use `--max-scenes 1` or `--max-scenes 3` for the first live proof. Do not run the full 50-scene book, or production tier, unless model spend has been explicitly approved.
+
+Runner controls:
+
+- `--resume` is enabled by default and skips completed scenes for the same run ID when the final scene file still exists.
+- `--force` intentionally reruns all selected scenes and resets that run ID's status JSONL.
+- `--stop-on-error` is the default; `--continue-on-error` attempts later scenes after a failure.
+- `--no-eval` skips deterministic corpus eval for debugging.
+- `--no-dashboard-checks` skips the local FastAPI summary-resolution check.
+
+Partial `--max-scenes` runs truncate only the in-memory inventory. The source `scene_inventory.json` remains untouched, summary metadata records `inventory_total_scene_count`, and strict `BookStructuralVerifier` is marked skipped with `reason = "partial_run"`. Eval and dashboard checks still run against the partial artifact set when enabled; eval is scoped to the selected inventory scene paths, not every stale `*.md` file in the shared book scene directory.
+
+Generation-time word-count enforcement happens before final verification: `QualityAgent` marks a scene `needs_review` when the edited text is below 90% of `JobContext.word_count_target`. That note routes through the normal REVISE loop, and `WriterAgent` receives the prior draft plus `word_count_under_target` feedback so it can expand rather than start blind. `WriterAgent` always recomputes `WriterOutput.word_count` from `draft_text`; model-reported word counts are never trusted. If retries are exhausted and a scene force-resolves, `make run-full-book` reports the unattended run as failed even when files were produced.
+
+Production runner outputs for `cedar-harbor-romance/book01`:
+
+- `data/series/cedar-harbor-romance/data/books/book01/runs/{run_id}/book_run_status.jsonl`
+- `data/series/cedar-harbor-romance/data/books/book01/runs/{run_id}/model_router.run.json`
+- `data/series/cedar-harbor-romance/data/books/book01/runs/{run_id}/cost_log.jsonl`
+- `data/series/cedar-harbor-romance/data/books/book01/scenes/*.md`
+- `data/series/cedar-harbor-romance/data/books/book01/manuscript.md`
+- `data/series/cedar-harbor-romance/data/books/book01/book_run_summary.json`
+
+Generated production artifacts under the committed `data/series/*/data/books/*` tree are gitignored. Specs, profiles, bible seed files, character sheets, and `scene_inventory.json` remain trackable.
+
 Run strict final-manuscript acceptance instead of draft acceptance with:
 
 ```bash
@@ -246,12 +288,154 @@ Regenerate the deterministic scene inventory:
 Run the first scene through the normal scene loop, when live test-tier model spend is intentional:
 
 ```bash
-.venv/bin/python -m pipeline.orchestrator \
-  --job ch01_sc01 \
-  --config data/series/cedar-harbor-romance/pipeline_config.json
+make run-full-book RUN_BOOK_ARGS="\
+  --config data/series/cedar-harbor-romance/pipeline_config.json \
+  --series-id cedar-harbor-romance \
+  --book-id book01 \
+  --run-id cedar-harbor-book01-test \
+  --model-tier test \
+  --provider openai \
+  --max-scenes 1"
 ```
 
-Continue scenes in `scene_inventory.json` order. Keep `model_router.json` defaulted to `test`; switch to production tier only through explicit run-local config changes after test-tier proof.
+Run the first three scenes by changing `--max-scenes 1` to `--max-scenes 3`. The legacy one-scene orchestrator path (`python -m pipeline.orchestrator --job ch01_sc01 ...`) remains available for debugging, but unattended production runs should use `make run-full-book` so resume, force, summary, eval, verifier, and dashboard checks share one contract.
+
+Keep `model_router.json` defaulted to `test`; `run_full_book.py` writes `model_router.run.json` under the run directory for explicit tier selection.
+
+Post-fix Cedar Harbor proof, 2026-06-15:
+
+```bash
+make run-full-book RUN_BOOK_ARGS="\
+  --config data/series/cedar-harbor-romance/pipeline_config.json \
+  --series-id cedar-harbor-romance \
+  --book-id book01 \
+  --run-id cedar-harbor-book01-wordcount-fix \
+  --model-tier test \
+  --provider openai \
+  --max-scenes 3"
+```
+
+Result: expected `FAIL` after the new guard. The run generated three scenes at production-scale lengths (`1320`, `1441`, `1220` words against `1300` targets), proving the underlength prompt/quality loop works. One scene exhausted quality retries and force-resolved due structural quality flags, so the unattended runner correctly failed the run instead of silently accepting it. Cost: `60541` tokens, `$0.02145795` estimated.
+
+Follow-up diagnosis: `ch01_sc02` had 7 medium structural flags in 1441 words. The old `QualityAgent` gate used an absolute `structural <= 6` warn threshold, which became brittle once scenes expanded to production length. The gate is now length-aware: floor `6`, then `ceil(6 flags per 1000 words)` for longer scenes. This would classify the observed `ch01_sc02` case as warn/GO while still failing dense structural issue clusters.
+
+Validation proof after the length-aware structural threshold:
+
+```bash
+make run-full-book RUN_BOOK_ARGS="\
+  --config data/series/cedar-harbor-romance/pipeline_config.json \
+  --series-id cedar-harbor-romance \
+  --book-id book01 \
+  --run-id cedar-harbor-book01-quality-tune \
+  --model-tier test \
+  --provider openai \
+  --max-scenes 3"
+```
+
+Result: `PASS`. The first invocation was interrupted by the tool timeout during `ch02_sc01`; rerunning the same command resumed correctly, skipped completed scenes 1-2, and finished scene 3. Final summary: `3/3` GO, `0` force-resolved, verifier skipped as `partial_run`, eval PASS over exactly `3` selected scenes, dashboard summary PASS, `3795` assembled words, `64841` tokens, `$0.02289585` estimated. Scene word counts: `1303`, `1184`, `1308`; `1184` is above the current 90% minimum for a 1300-word target.
+
+Ten-scene continuation result:
+
+```bash
+make run-full-book RUN_BOOK_ARGS="\
+  --config data/series/cedar-harbor-romance/pipeline_config.json \
+  --series-id cedar-harbor-romance \
+  --book-id book01 \
+  --run-id cedar-harbor-book01-quality-tune \
+  --model-tier test \
+  --provider openai \
+  --max-scenes 10"
+```
+
+Result: expected `FAIL` after exposing a new issue. The run resumed correctly, skipped scenes 1-3, generated scenes 4-10, and ended with `9/10` GO, `1` force-resolved (`ch05_sc01`), eval FAIL, dashboard PASS, verifier skipped as `partial_run`, `12556` assembled words, `215374` tokens, `$0.0757437` estimated. Diagnosis: `ch05_sc01` was structurally within the scaled warn threshold but the editor's structural surgical edit shrank an above-target writer draft to `1165` words, 5 words below the 90% floor (`1170`). The final text also contained an appended alternate-version separator (`---`). Follow-up fix: `EditorAgent` now rejects structural-only surgical edits that shrink an already-above-minimum draft below the floor; NoFly cleanup can still shrink and route through normal quality retry. `WriterAgent` retry prompts now explicitly prohibit Markdown separators and alternate appended versions.
+
+Fresh proof after the editor length guard:
+
+```bash
+make run-full-book RUN_BOOK_ARGS="\
+  --config data/series/cedar-harbor-romance/pipeline_config.json \
+  --series-id cedar-harbor-romance \
+  --book-id book01 \
+  --run-id cedar-harbor-book01-editor-guard \
+  --model-tier test \
+  --provider openai \
+  --max-scenes 10"
+```
+
+Result: expected `FAIL` after exposing the next root cause. The editor guard fixed the prior `ch05_sc01` failure: `ch05_sc01` routed GO at `1270` words. The run still ended with `9/10` GO, `1` force-resolved (`ch03_sc02`), eval PASS over exactly `10` selected scenes, dashboard summary PASS, verifier skipped as `partial_run`, `13184` assembled words, `204805` tokens, `$0.0719106` estimated. Diagnosis: `ch03_sc02` had `0` NoFly violations and `0` structural issues, but actual final/status word count was `1008`, below the `1170` minimum. Writer logs and memory were trusting model-reported counts around `1318` words, so the runtime appeared to be expanding successfully while the actual text remained underlength. Follow-up fix: `WriterAgent` now recomputes every `WriterOutput.word_count` from `draft_text`, overwrites the model-reported value, normalizes `scene_id` to `JobContext.scene_id`, and tells retry prompts the previous draft's actual word count plus the minimum additional words needed.
+
+## Next Forward-Progress Approval Packet
+
+Use this packet when the author wants one approval to move the Cedar Harbor proof forward instead of approving one tiny live step at a time.
+
+Approval language:
+
+```text
+Approved: run the Cedar Harbor forward-progress batch on test tier only, cap estimated live spend at $0.50, progress 10 -> 20 -> 30 -> 40 -> 50 scenes when gates pass, and use one scoped fix-and-retry cycle if a stage exposes a deterministic runner/agent bug. No production tier.
+```
+
+Authorized by that single approval:
+
+- Preflight with no live spend: inspect status, confirm `model_router.json` is still `test`, run `make lint && OPENAI_API_KEY= ANTHROPIC_API_KEY= make test` if source changed since the last green suite.
+- Start fresh run ID `cedar-harbor-book01-writer-count` at `--max-scenes 10` on `test/openai`.
+- If partial gates pass, continue the same run ID with `--max-scenes 20`, then `30`, then `40`, then `50`. Resume skips already-completed scenes.
+- If a tool timeout interrupts a live stage, rerun the same command once to resume without asking again.
+- If a stage fails due to a deterministic code issue in the runner, `WriterAgent`, `EditorAgent`, or `QualityAgent`, diagnose from artifacts, implement the smallest source fix, run no-live tests, then retry that same stage once with a fresh run ID suffix.
+
+Automatic continue gates for partial stages (`10`, `20`, `30`, `40`):
+
+- `run_passed = true`
+- `force_resolved_scenes = 0`
+- deterministic eval passes for exactly the selected scene paths
+- dashboard summary check passes
+- no unexpected stale-scene eval globbing or summary inconsistency
+- estimated cost remains below the packet cap
+
+Full-stage gate (`50`):
+
+- all partial gates pass
+- `BookStructuralVerifier` runs because this is no longer a partial run
+- if verifier fails, stop after diagnosis and record whether the failure is word-count, structure, heat-curve, required-slot, or another check
+
+Stop and ask before continuing if any of these occur:
+
+- estimated live spend would exceed `$0.50`
+- production tier or Anthropic production models would be used
+- a fix would loosen sensitivity, quality, or content-policy gates rather than correcting measurement/routing behavior
+- a fix requires new dependencies, new services, or schema/profile changes
+- two live failures occur at the same stage after one scoped fix-and-retry cycle
+- the required next step is story/content judgment rather than deterministic pipeline behavior
+
+Canonical staged command, changing only `--max-scenes` as gates pass:
+
+```bash
+make run-full-book RUN_BOOK_ARGS="\
+  --config data/series/cedar-harbor-romance/pipeline_config.json \
+  --series-id cedar-harbor-romance \
+  --book-id book01 \
+  --run-id cedar-harbor-book01-writer-count \
+  --model-tier test \
+  --provider openai \
+  --max-scenes 10"
+```
+
+Forward-progress batch result, 2026-06-16:
+
+- Preflight: root `model_router.json` and Cedar Harbor `pipeline_config.json` both confirmed `test/openai`; `make lint` passed.
+- Stage `cedar-harbor-book01-writer-count --max-scenes 10`: `PASS`, `10/10` GO, `0` force-resolved, eval PASS over exactly `10` scenes, dashboard summary PASS, verifier skipped as `partial_run`, cost `$0.0619731` / `175062` tokens.
+- Stage `cedar-harbor-book01-writer-count --max-scenes 20`: `FAIL`, but with useful signal: `20/20` GO and `0` force-resolved, dashboard summary PASS, verifier skipped as `partial_run`; deterministic eval failed on `ch08_sc02` with `AITellMetric=0.4215`. Cost for that run ID at failure: `$0.1220286` / `344147` tokens.
+- Diagnosis: live `QualityAgent` used raw structural flag count for warn/GO, while offline `AITellMetric` scores weighted structural density. `ch08_sc02` had enough weighted structural density to fail eval while still fitting the raw length-aware count threshold.
+- Scoped fix: `QualityAgent` now gates on both raw structural count and `EditorOutput.structural_weighted_score`. Weighted warn threshold is aligned to offline eval pass behavior: about `5` weighted structural points per `1K` words, with a floor of `5`. Regression test: `test_structural_weighted_threshold_aligns_with_ai_tell_eval`.
+- Verification after scoped fix: focused tests passed, `make lint` passed, and no-live full suite passed with `395 passed, 6 skipped`.
+- Retry `cedar-harbor-book01-writer-count-ai-tell --max-scenes 20`: stopped early because OpenAI returned `429 insufficient_quota`. Partial retry artifact: `5/20` GO, `1` force-resolved before the writer-node quota error, dashboard summary PASS, cost `$0.0322014` / `91715` tokens. Live progression stopped; no production tier was used.
+- Additional fail-closed fix from retry: `SceneStateMachine` now stops immediately on writer/editor/continuity/quality node exceptions instead of continuing downstream after `error` is set. Regression test: `test_writer_exception_stops_before_editor_quality_and_final`.
+- Final no-live verification after fail-closed fix: `make lint` passed and `OPENAI_API_KEY= ANTHROPIC_API_KEY= make test` passed with `396 passed, 6 skipped`.
+- User approved Anthropic test tier as the fallback provider after OpenAI quota exhaustion. Anthropic stage `cedar-harbor-book01-weighted-gate-anthropic --max-scenes 20` passed: `20/20` GO, `0` force-resolved, eval PASS over exactly `20` scenes, dashboard summary PASS, verifier skipped as `partial_run`, `26441` assembled words against 26000 planned selected-scene words, `$0.4984488` / `233001` tokens.
+- User approved an additional `$5` Anthropic test-tier cap. Continuation `--max-scenes 30` passed: `30/30` GO, `0` force-resolved, eval PASS, dashboard PASS, verifier skipped as `partial_run`, `39077` assembled words, cumulative cost `$0.6903` / `320703` tokens.
+- Continuation `--max-scenes 40` passed: `40/40` GO, `0` force-resolved, eval PASS, dashboard PASS, verifier skipped as `partial_run`, `52633` assembled words, cumulative cost `$0.9024768` / `416828` tokens.
+- Full stage `--max-scenes 50` passed: `50/50` GO, `0` force-resolved, eval PASS over all 50 scenes, dashboard summary PASS, strict `BookStructuralVerifier` PASS, final manuscript word count `64982` against the 65000-word target, cumulative cost `$1.153952` / `534840` tokens.
+
+The full Cedar Harbor `book01` test-tier proof is complete. Do not run further live regeneration, production tier, or provider comparison without a new explicit approval. OpenAI remains blocked by `429 insufficient_quota`; any future OpenAI retry should use a fresh run ID because `cedar-harbor-book01-writer-count-ai-tell` contains partial quota-failure artifacts.
 
 ## Live Acceptance Results
 
