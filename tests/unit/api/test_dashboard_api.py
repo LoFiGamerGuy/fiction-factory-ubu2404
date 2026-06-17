@@ -251,6 +251,75 @@ def test_metrics_history_scene_from_sqlite(dashboard_data_root: Path) -> None:
     assert body["items"][0]["metrics"] == {"interiority_pct": 0.20}
 
 
+def test_book_ledgers_prefer_summary_ledger_data_root(dashboard_data_root: Path) -> None:
+    """Completed run summaries point dashboard ledgers at run-local SQLite files."""
+    book_id = "book-api-run-ledgers"
+    stale_root = dashboard_data_root
+    run_ledger_root = dashboard_data_root / "runs" / "run-123" / "ledgers"
+    summary_dir = dashboard_data_root / "books" / book_id
+    summary_dir.mkdir(parents=True)
+    (summary_dir / "book_run_summary.json").write_text(
+        json.dumps({"book_id": book_id, "ledger_data_root": str(run_ledger_root)}),
+        encoding="utf-8",
+    )
+    _append_metrics_event(
+        stale_root,
+        book_id,
+        chapter_id="chapter-01",
+        scene_id="stale-scene",
+        word_count=9999,
+        interiority_pct=0.90,
+    )
+    _append_metrics_event(
+        run_ledger_root,
+        book_id,
+        chapter_id="chapter-01",
+        scene_id="run-scene",
+        word_count=1234,
+        interiority_pct=0.20,
+    )
+
+    response = client.get(f"/books/{book_id}/ledgers")
+
+    assert response.status_code == 200
+    assert response.json()["word_count_total"] == 1234
+
+
+def test_metrics_history_prefers_summary_ledger_data_root(dashboard_data_root: Path) -> None:
+    """Metric history follows the run-local ledger root declared by the summary."""
+    book_id = "book-api-run-metrics"
+    run_ledger_root = dashboard_data_root / "runs" / "run-456" / "ledgers"
+    summary_dir = dashboard_data_root / "books" / book_id
+    summary_dir.mkdir(parents=True)
+    (summary_dir / "book_run_summary.json").write_text(
+        json.dumps({"book_id": book_id, "ledger_data_root": str(run_ledger_root)}),
+        encoding="utf-8",
+    )
+    _append_metrics_event(
+        dashboard_data_root,
+        book_id,
+        chapter_id="chapter-01",
+        scene_id="stale-scene",
+        word_count=9999,
+        interiority_pct=0.90,
+    )
+    _append_metrics_event(
+        run_ledger_root,
+        book_id,
+        chapter_id="chapter-01",
+        scene_id="run-scene",
+        word_count=1234,
+        interiority_pct=0.20,
+    )
+
+    response = client.get(f"/books/{book_id}/metrics/history?granularity=scene&metric=word_count")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["scene_id"] for item in body["items"]] == ["run-scene"]
+    assert body["items"][0]["metrics"] == {"word_count": 1234}
+
+
 def test_metrics_history_beat_fallback_from_sqlite(dashboard_data_root: Path) -> None:
     """Beat granularity returns scene-backed fallback points until beat events exist."""
     book_id = "book-api-beats"

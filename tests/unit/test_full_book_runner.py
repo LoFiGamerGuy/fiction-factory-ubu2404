@@ -12,6 +12,8 @@ from typing import Any
 from pipeline.core.agent_context import AgentContext
 from pipeline.core.job_context import JobContext
 from pipeline.job_runner import SceneRunResult
+from pipeline.ledgers.book_metrics_ledger import BookMetricsEvent
+from pipeline.ledgers.ledger_manager import SceneResult
 
 full_book = importlib.import_module("scripts.run_full_book")
 
@@ -36,6 +38,34 @@ class FakeJobRunner:
         )
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(text, encoding="utf-8")
+        job_context.output_data["editor_agent"] = {"edited_text": text}
+        self.ctx.ledger_manager.update(
+            SceneResult(
+                scene_id=job_context.scene_id,
+                book_id=job_context.book_id,
+                chapter_id=str(job_context.chapter_id),
+                timestamp="2026-06-17T00:00:00+00:00",
+                scene_type="action",
+                metrics_event=BookMetricsEvent(
+                    event_id=f"{job_context.job_id}-metrics",
+                    book_id=job_context.book_id,
+                    chapter_id=str(job_context.chapter_id),
+                    scene_id=job_context.scene_id,
+                    timestamp="2026-06-17T00:00:00+00:00",
+                    word_count=job_context.word_count_target,
+                    interiority_pct=0.20,
+                    dialogue_ratio=0.30,
+                    exposition_pct=0.25,
+                    action_pct=0.25,
+                    sensory_density_per_1k=0.0,
+                    em_dash_density=0.0,
+                    sentence_length_avg=0.0,
+                    ai_tell_count=0,
+                    no_fly_violations=0,
+                    heat_curve_position=0.2,
+                ),
+            )
+        )
         return SceneRunResult(
             scene_id=job_context.scene_id,
             job_id=job_context.job_id,
@@ -252,6 +282,7 @@ def test_full_book_runner_summary_contains_unattended_contract(tmp_path: Path) -
     assert saved["resume_enabled"] is True
     assert saved["force_rerun"] is False
     assert saved["router_config_path"].endswith("model_router.run.json")
+    assert saved["ledger_data_root"].endswith("runs/cedar-summary/ledgers")
     assert saved["dashboard_api_status"]["passed"] is True
     assert saved["run_passed"] is True
     assert (
@@ -300,3 +331,67 @@ def test_eval_status_uses_selected_inventory_paths(monkeypatch: Any, tmp_path: P
     assert captured["scene_paths"] == selected
     assert status["scene_count"] == 2
     assert stale not in [Path(item["scene_path"]) for item in status["scenes"]]
+
+
+def test_full_book_runner_uses_run_local_ledgers_across_run_ids(tmp_path: Path) -> None:
+    config_path, _series_root = _write_cedar_fixture(tmp_path)
+    first_instances: list[FakeJobRunner] = []
+    second_instances: list[FakeJobRunner] = []
+
+    first_payload = full_book.run_full_book(
+        config_path=config_path,
+        run_id="cedar-ledger-a",
+        max_scenes=2,
+        run_corpus_eval=False,
+        run_dashboard_checks=False,
+        job_runner_factory=_factory(first_instances),
+    )
+    second_payload = full_book.run_full_book(
+        config_path=config_path,
+        run_id="cedar-ledger-b",
+        max_scenes=3,
+        run_corpus_eval=False,
+        run_dashboard_checks=False,
+        job_runner_factory=_factory(second_instances),
+    )
+
+    assert first_payload["ledger_dashboard_summary"]["word_count_total"] == 2600
+    assert second_payload["ledger_dashboard_summary"]["word_count_total"] == 3900
+    assert first_payload["ledger_data_root"] != second_payload["ledger_data_root"]
+    assert Path(second_payload["ledger_data_root"]).is_dir()
+
+
+def test_full_book_runner_staged_resume_does_not_double_count_ledgers(tmp_path: Path) -> None:
+    config_path, _series_root = _write_cedar_fixture(tmp_path)
+    run_id = "cedar-ledger-staged"
+
+    payload_20 = full_book.run_full_book(
+        config_path=config_path,
+        run_id=run_id,
+        max_scenes=2,
+        run_corpus_eval=False,
+        run_dashboard_checks=False,
+        job_runner_factory=_factory([]),
+    )
+    payload_30 = full_book.run_full_book(
+        config_path=config_path,
+        run_id=run_id,
+        max_scenes=3,
+        run_corpus_eval=False,
+        run_dashboard_checks=False,
+        job_runner_factory=_factory([]),
+    )
+    payload_40 = full_book.run_full_book(
+        config_path=config_path,
+        run_id=run_id,
+        max_scenes=4,
+        run_corpus_eval=False,
+        run_dashboard_checks=False,
+        job_runner_factory=_factory([]),
+    )
+
+    assert payload_20["ledger_dashboard_summary"]["word_count_total"] == 2600
+    assert payload_30["skipped_scenes"] == 2
+    assert payload_30["ledger_dashboard_summary"]["word_count_total"] == 3900
+    assert payload_40["skipped_scenes"] == 3
+    assert payload_40["ledger_dashboard_summary"]["word_count_total"] == 5200

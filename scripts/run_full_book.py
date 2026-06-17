@@ -13,6 +13,7 @@ import argparse
 import json
 import logging
 import os
+import shutil
 import sys
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
@@ -143,6 +144,11 @@ def write_router_config_for_tier(base_config_path: Path, output_dir: Path, model
     config_path = output_dir / "model_router.run.json"
     config_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
     return config_path
+
+
+def run_ledger_data_root(run_dir: Path) -> Path:
+    """Return the run-local ledger root for production full-book execution."""
+    return run_dir / "ledgers"
 
 
 def make_project_spec(
@@ -406,10 +412,14 @@ def run_full_book(
         or os.getenv("FF_LLM_PROVIDER", "openai")
     )
     seed = int(config.get("seed") or runtime_defaults.get("seed") or 0)
-    data_root = resolve_path(
+    configured_data_root = resolve_path(
         str(config.get("data_root", layout.series_root / "data" / "ledgers")),
         base=workspace_root,
     )
+    ledger_data_root = run_ledger_data_root(run_dir)
+    if force and ledger_data_root.exists():
+        shutil.rmtree(ledger_data_root)
+    ledger_data_root.mkdir(parents=True, exist_ok=True)
     output_dir = resolve_path(str(config.get("output_dir", "output")), base=workspace_root) / run_id
     router_config_path = write_router_config_for_tier(
         resolve_path(
@@ -423,7 +433,7 @@ def run_full_book(
     ledger_manager = LedgerManager(
         book_id=resolved_book_id,
         series_id=resolved_series_id,
-        data_root=data_root,
+        data_root=ledger_data_root,
     )
     managed_agent_mode = bool(
         config.get("managed_agent_mode", runtime_defaults.get("managed_agent_mode", False))
@@ -515,6 +525,8 @@ def run_full_book(
             "dashboard_checks_enabled": run_dashboard_checks,
             "router_config_path": str(router_config_path),
             "cost_log_path": str(cost_log_path),
+            "configured_data_root": str(configured_data_root),
+            "ledger_data_root": str(ledger_data_root),
             "managed_agent_mode": managed_agent_mode,
         }
         payload = runner.write_book_run_summary(

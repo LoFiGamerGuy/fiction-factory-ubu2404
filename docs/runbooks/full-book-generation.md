@@ -58,7 +58,7 @@ Use `--max-scenes 1` or `--max-scenes 3` for the first live proof. Do not run th
 Runner controls:
 
 - `--resume` is enabled by default and skips completed scenes for the same run ID when the final scene file still exists.
-- `--force` intentionally reruns all selected scenes and resets that run ID's status JSONL.
+- `--force` intentionally reruns all selected scenes and resets that run ID's status JSONL and run-local ledger root.
 - `--stop-on-error` is the default; `--continue-on-error` attempts later scenes after a failure.
 - `--no-eval` skips deterministic corpus eval for debugging.
 - `--no-dashboard-checks` skips the local FastAPI summary-resolution check.
@@ -72,11 +72,16 @@ Production runner outputs for `cedar-harbor-romance/book01`:
 - `data/series/cedar-harbor-romance/data/books/book01/runs/{run_id}/book_run_status.jsonl`
 - `data/series/cedar-harbor-romance/data/books/book01/runs/{run_id}/model_router.run.json`
 - `data/series/cedar-harbor-romance/data/books/book01/runs/{run_id}/cost_log.jsonl`
+- `data/series/cedar-harbor-romance/data/books/book01/runs/{run_id}/ledgers/`
 - `data/series/cedar-harbor-romance/data/books/book01/scenes/*.md`
 - `data/series/cedar-harbor-romance/data/books/book01/manuscript.md`
 - `data/series/cedar-harbor-romance/data/books/book01/book_run_summary.json`
 
 Generated production artifacts under the committed `data/series/*/data/books/*` tree are gitignored. Specs, profiles, bible seed files, character sheets, and `scene_inventory.json` remain trackable.
+
+Production full-book ledgers are run-local. `scripts/run_full_book.py` writes `LedgerManager` state under `runs/{run_id}/ledgers/` and records that absolute path in `book_run_summary.json` as `ledger_data_root`. Resuming the same run ID reuses those ledgers so staged `20 -> 30 -> 40 -> 50` continuation does not lose prior scene metrics. Starting a different run ID gets an isolated ledger root. Using `--force` removes that run ID's ledger root before regeneration.
+
+The Author Dashboard book-level endpoints prefer `book_run_summary.ledger_data_root` when present, so `GET /books/{book_id}/ledgers`, metric history, character metrics, promise, intimacy, and quality-gate reads match the generated run artifact instead of any stale shared proof-run ledgers. Older summaries that predate `ledger_data_root` remain readable but cannot retroactively provide run-local ledger history.
 
 Run strict final-manuscript acceptance instead of draft acceptance with:
 
@@ -132,6 +137,7 @@ The deterministic manuscript format is:
 - `previous_failed_scene_ids` from prior status history and `checkpoint_thread_ids` for every scene in the current run.
 - Manuscript path and summary path.
 - Ledger dashboard summary.
+- `configured_data_root` and `ledger_data_root`; production full-book runs use the run-local ledger root for mutable ledger state.
 - `cost_summary` with cost log path, entry count, input/output/total tokens, malformed entry count, and total USD cost.
 - `files_api` with the opt-in Files API flag and run-local uploaded file IDs.
 - Optional `eval_status`, strict `verifier_status`, and `draft_acceptance_status` blocks when those steps are wired or supplied.
@@ -436,6 +442,13 @@ Forward-progress batch result, 2026-06-16:
 - Full stage `--max-scenes 50` passed: `50/50` GO, `0` force-resolved, eval PASS over all 50 scenes, dashboard summary PASS, strict `BookStructuralVerifier` PASS, final manuscript word count `64982` against the 65000-word target, cumulative cost `$1.153952` / `534840` tokens.
 
 The full Cedar Harbor `book01` test-tier proof is complete. Do not run further live regeneration, production tier, or provider comparison without a new explicit approval. OpenAI remains blocked by `429 insufficient_quota`; any future OpenAI retry should use a fresh run ID because `cedar-harbor-book01-writer-count-ai-tell` contains partial quota-failure artifacts.
+
+No-live hardening after the full proof, 2026-06-17:
+
+- Root cause fixed: staged full-book runs no longer write mutable ledger state into the shared configured ledger root. The runner now writes ledgers under `runs/{run_id}/ledgers/` and records `ledger_data_root` in the summary.
+- Regression coverage: `./.venv/bin/pytest tests/unit/test_full_book_runner.py tests/unit/api/test_dashboard_api.py` passed with `30 passed`. Tests cover run-ID isolation, staged resume without double-counting (`2 -> 3 -> 4` standing in for `20 -> 30 -> 40`), `--force` ledger reset behavior, and dashboard summary-aware ledger resolution. Final no-live gate also passed: `make lint` clean and `OPENAI_API_KEY= ANTHROPIC_API_KEY= make test` returned `400 passed, 6 skipped`.
+- Dashboard dogfood against the existing Cedar Harbor summary: summary read succeeded with `summary_found = true`, `run_passed = true`, and `total_word_count = 64982`. That existing summary predates `ledger_data_root`, so ledger endpoints correctly cannot reconstruct run-local ledger history from it.
+- EvoSkill dogfood: `OPENAI_API_KEY= ANTHROPIC_API_KEY= ./.venv/bin/python scripts/evoskill_nightly.py --data-root "data/series/cedar-harbor-romance/data/ledgers"` found `29` Cedar Harbor failure traces in the last 24 hours and promoted one local skill under the gitignored ledger tree.
 
 ## Live Acceptance Results
 

@@ -68,6 +68,41 @@ def _book_summary_candidates(book_id: str) -> list[Path]:
     return unique
 
 
+def _load_book_summary(book_id: str) -> tuple[Path, dict[str, Any]] | None:
+    """Load the first matching book_run_summary.json for *book_id*."""
+    for summary_path in _book_summary_candidates(book_id):
+        if not summary_path.exists():
+            continue
+        loaded = json.loads(summary_path.read_text(encoding="utf-8"))
+        if not isinstance(loaded, dict):
+            raise HTTPException(
+                status_code=500,
+                detail=f"Invalid book_run_summary.json at {summary_path}",
+            )
+        return summary_path, loaded
+    return None
+
+
+def _ledger_data_root_for_book(book_id: str) -> Path:
+    """Return the ledger root for book-level dashboard endpoints.
+
+    Production full-book runs isolate ledgers under the run directory. When a
+    summary advertises that location, use it so dashboard totals match the run
+    artifact instead of any stale shared proof-run ledgers.
+    """
+    summary = _load_book_summary(book_id)
+    if summary is not None:
+        summary_path, loaded = summary
+        raw = loaded.get("ledger_data_root")
+        if raw:
+            candidate = Path(str(raw))
+            if not candidate.is_absolute():
+                candidate = summary_path.parent / candidate
+            if candidate.exists():
+                return candidate
+    return _data_root()
+
+
 def _data_root() -> Path:
     """Return the ledger data root; tests may override app.state.data_root."""
     configured = getattr(app.state, "data_root", None)
@@ -167,7 +202,7 @@ async def get_ledgers(book_id: str) -> dict[str, Any]:
     # Deferred import — allows tests to mock without ledger data on disk.
     from pipeline.ledgers.ledger_manager import LedgerManager  # noqa: PLC0415
 
-    manager = LedgerManager(book_id, data_root=_data_root())
+    manager = LedgerManager(book_id, data_root=_ledger_data_root_for_book(book_id))
     try:
         dashboard = manager.get_dashboard_summary(book_id, "current")
         try:
@@ -182,15 +217,9 @@ async def get_ledgers(book_id: str) -> dict[str, Any]:
 @app.get("/books/{book_id}/summary")
 async def get_book_summary(book_id: str) -> dict[str, Any]:
     """Return book_run_summary.json for *book_id* when available."""
-    for summary_path in _book_summary_candidates(book_id):
-        if not summary_path.exists():
-            continue
-        loaded = json.loads(summary_path.read_text(encoding="utf-8"))
-        if not isinstance(loaded, dict):
-            raise HTTPException(
-                status_code=500,
-                detail=f"Invalid book_run_summary.json at {summary_path}",
-            )
+    summary = _load_book_summary(book_id)
+    if summary is not None:
+        summary_path, loaded = summary
         result: dict[str, Any] = dict(loaded)
         result.setdefault("book_id", book_id)
         result.setdefault("summary_path", str(summary_path))
@@ -207,13 +236,14 @@ async def get_book_summary(book_id: str) -> dict[str, Any]:
 @app.get("/books/{book_id}/promises")
 async def get_book_promises(book_id: str) -> dict[str, Any]:
     """Return within-book PromiseLedger events grouped by promise_id."""
-    db_path = _data_root() / book_id / "promise.db"
+    ledger_root = _ledger_data_root_for_book(book_id)
+    db_path = ledger_root / book_id / "promise.db"
     if not db_path.exists():
         return {"book_id": book_id, "promises": {}}
 
     from pipeline.ledgers.promise_ledger import PromiseLedger  # noqa: PLC0415
 
-    ledger = PromiseLedger(book_id, data_root=_data_root())
+    ledger = PromiseLedger(book_id, data_root=ledger_root)
     try:
         rows = ledger._all_payloads()
     finally:
@@ -224,7 +254,8 @@ async def get_book_promises(book_id: str) -> dict[str, Any]:
 @app.get("/books/{book_id}/intimacy")
 async def get_book_intimacy(book_id: str) -> dict[str, Any]:
     """Return IntimacyEscalationLedger events for timeline display."""
-    db_path = _data_root() / book_id / "intimacy_escalation.db"
+    ledger_root = _ledger_data_root_for_book(book_id)
+    db_path = ledger_root / book_id / "intimacy_escalation.db"
     if not db_path.exists():
         return {"book_id": book_id, "events": []}
 
@@ -232,7 +263,7 @@ async def get_book_intimacy(book_id: str) -> dict[str, Any]:
         IntimacyEscalationLedger,
     )
 
-    ledger = IntimacyEscalationLedger(book_id, data_root=_data_root())
+    ledger = IntimacyEscalationLedger(book_id, data_root=ledger_root)
     try:
         rows = ledger._all_payloads()
     finally:
@@ -249,7 +280,7 @@ async def get_metrics_history(
     """Return SQLite-backed book metrics history at chapter or scene granularity."""
     from pipeline.ledgers.ledger_manager import LedgerManager  # noqa: PLC0415
 
-    manager = LedgerManager(book_id, data_root=_data_root())
+    manager = LedgerManager(book_id, data_root=_ledger_data_root_for_book(book_id))
     try:
         return manager.get_metrics_history(granularity=granularity, metric=metric)
     except ValueError as exc:
@@ -263,7 +294,7 @@ async def get_character_metrics(book_id: str, char_id: str) -> dict[str, Any]:
     """Return SQLite-backed per-scene character metrics for one character."""
     from pipeline.ledgers.ledger_manager import LedgerManager  # noqa: PLC0415
 
-    manager = LedgerManager(book_id, data_root=_data_root())
+    manager = LedgerManager(book_id, data_root=_ledger_data_root_for_book(book_id))
     try:
         return manager.get_character_metrics(char_id)
     finally:
@@ -333,4 +364,4 @@ async def get_evoskill(series_id: str) -> list[dict[str, Any]]:
 @app.get("/books/{book_id}/quality_gates")
 async def get_quality_gates(book_id: str) -> list[dict[str, Any]]:
     """Return all quality gate history events for *book_id*."""
-    return _read_jsonl(_data_root() / book_id / "quality_gate_history.jsonl")
+    return _read_jsonl(_ledger_data_root_for_book(book_id) / book_id / "quality_gate_history.jsonl")

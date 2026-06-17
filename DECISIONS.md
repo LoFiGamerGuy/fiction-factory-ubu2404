@@ -252,6 +252,14 @@ Items explicitly deferred to V2. Do not implement in V1.
 
 ## Section 4: Task 011–015 Decisions
 
+### T014-031 — Full-Book Ledgers Are Run-Local
+**Date:** 2026-06-17
+**Statement:** `scripts/run_full_book.py` now writes `LedgerManager` state under each full-book run directory at `data/books/{book_id}/runs/{run_id}/ledgers` and records that path in `book_run_summary.json` as `ledger_data_root`. When `--force` is used, that run-local ledger root is removed before regeneration. The Author Dashboard book-level ledger, metric history, character metrics, promise, intimacy, and quality-gate endpoints prefer `book_run_summary.ledger_data_root` when present.
+**Rationale:** The Cedar Harbor staged proof reused shared configured ledgers across multiple proof run IDs, so the durable manuscript count was correct (`64982`) while the embedded dashboard summary could show accumulated stale state (`146285`). Full-book resume needs same-run ledger continuity, but different run IDs must not contaminate each other. Dashboard reads must follow the run summary so author-facing totals match the generated run artifact.
+**Supersedes:** Shared configured ledger root as the production full-book runner's mutable ledger state.
+**Verification:** `./.venv/bin/pytest tests/unit/test_full_book_runner.py tests/unit/api/test_dashboard_api.py` passed (`30 passed`). `make lint` passed. `OPENAI_API_KEY= ANTHROPIC_API_KEY= make test` passed (`400 passed, 6 skipped`). No-live dashboard dogfood confirmed the old Cedar Harbor summary is readable but lacks `ledger_data_root`; the fix applies to new summaries. No-live EvoSkill nightly over Cedar Harbor traces promoted one skill from 29 failure traces.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
 ### T014-030 — Cedar Harbor Full Anthropic Test-Tier Book Passed
 **Date:** 2026-06-16
 **Statement:** The staged Anthropic test-tier run `cedar-harbor-book01-weighted-gate-anthropic --max-scenes 50` completed the full Cedar Harbor `book01` scaffold successfully. Final summary: `50/50` scenes completed, `50/50` GO decisions, `0` force-resolved scenes, deterministic eval PASS scoped to all 50 scene paths, dashboard summary PASS, strict `BookStructuralVerifier` PASS, and final manuscript word count `64982` against the 65000-word target.
