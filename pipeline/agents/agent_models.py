@@ -31,6 +31,8 @@ class QualityResult(BaseModel):
     tier: str = Field(default="pass", description="pass | warn | fail")
     nofly_violations: int = Field(default=0)
     structural_flags: int = Field(default=0)
+    structural_weighted_score: int = Field(default=0)
     sensitivity_violation: bool = Field(default=False)
     scene_id: str = Field(default="")
     notes: list[str] = Field(default_factory=list)
+    metrics: dict[str, float] = Field(default_factory=dict)

@@ -252,6 +252,14 @@ Items explicitly deferred to V2. Do not implement in V1.
 
 ## Section 4: Task 011–015 Decisions
 
+### T014-032 — Runtime BookMetrics Are Deterministic
+**Date:** 2026-06-17
+**Statement:** `QualityAgent` now computes runtime `BookMetricsLedger` prose metrics from edited scene text instead of writing placeholder constants. `QualityResult` carries the computed metrics and `structural_weighted_score`; `BookMetricsEvent` records computed word count, interiority, dialogue ratio, exposition, action, sensory density, em-dash density, sentence-length average, and `ai_tell_count = nofly_violations + structural_flags`. `JobRunner` enriches EvoSkill traces with tier flags, NoFly/structural counts, weighted structural points, and numeric `metric_*` values.
+**Rationale:** The Cedar Harbor no-live autopsy showed the durable manuscript summary was correct (`64982`) while the historical embedded dashboard total was stale (`146285`), and the old live ledger path still would have written fixed prose-shape values (`interiority_pct = 0.20`, `dialogue_ratio = 0.30`, `scene_type = action`, and AI-tell based only on NoFly) despite deterministic eval and structural analysis having scene-specific signals. Author-facing dashboards, context packs, and EvoSkill need actionable per-scene metrics, not placeholders.
+**Supersedes:** Placeholder runtime BookMetrics constants and NoFly-only runtime `ai_tell_count`.
+**Verification:** `./.venv/bin/pytest tests/unit/test_word_count_enforcement.py tests/unit/test_job_runner_phase9.py tests/integration/test_evoskill.py` passed (`27 passed`). `make lint` passed. `OPENAI_API_KEY= ANTHROPIC_API_KEY= make test` passed (`402 passed, 6 skipped`).
+**Runbook:** `docs/runbooks/full-book-generation.md`; autopsy report: `docs/runbooks/cedar-harbor-no-live-hardening-report.md`
+
 ### T014-031 — Full-Book Ledgers Are Run-Local
 **Date:** 2026-06-17
 **Statement:** `scripts/run_full_book.py` now writes `LedgerManager` state under each full-book run directory at `data/books/{book_id}/runs/{run_id}/ledgers` and records that path in `book_run_summary.json` as `ledger_data_root`. When `--force` is used, that run-local ledger root is removed before regeneration. The Author Dashboard book-level ledger, metric history, character metrics, promise, intimacy, and quality-gate endpoints prefer `book_run_summary.ledger_data_root` when present.

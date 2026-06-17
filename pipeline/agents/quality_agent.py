@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 from typing import TYPE_CHECKING, ClassVar
 
 from pipeline.agents.agent_models import QualityResult
@@ -26,6 +27,63 @@ logger = logging.getLogger(__name__)
 _PASS_REQUIRES = Verdict.NEUTRAL  # neutral or positive → pass
 _WARN_THRESHOLD = Verdict.NEGATIVE  # negative but not all metrics → warn
 _SCENE_WORD_TARGET_MIN_RATIO = 0.90
+_WORD_RE = re.compile(r"\b\w+(?:'\w+)?\b")
+_DIALOGUE_RE = re.compile(r'"([^"\n]+)"')
+_SENTENCE_RE = re.compile(r"(?<=[.!?])\s+")
+_INTERIORITY_RE = re.compile(
+    r"\b(felt|thought|knew|realized|remembered|wanted|needed|feared|wondered|"
+    r"understood|decided|wished|recognized|trusted|doubted|hoped|afraid|terrified|"
+    r"chest|throat|heart|stomach|memory|hurt|love|risk|vulnerab\w*)\b",
+    re.IGNORECASE,
+)
+_EXPOSITION_RE = re.compile(
+    r"\b(years? ago|decades? ago|had been|used to|remembered|history|before|after|"
+    r"back then|since|for years|for decades|when (?:she|he|they) (?:was|were|had))\b",
+    re.IGNORECASE,
+)
+_ACTION_RE = re.compile(
+    r"\b(walked|stood|sat|moved|reached|took|turned|opened|closed|crossed|stepped|"
+    r"lifted|set|placed|looked|nodded|smiled|frowned|held|carried|dropped|pushed|"
+    r"pulled|leaned|followed|entered|left|said|asked|answered|whispered)\b",
+    re.IGNORECASE,
+)
+_SENSORY_WORDS = frozenset(
+    {
+        "salt",
+        "brine",
+        "harbor",
+        "wind",
+        "rain",
+        "cold",
+        "warm",
+        "heat",
+        "light",
+        "shadow",
+        "silver",
+        "blue",
+        "dark",
+        "bright",
+        "dust",
+        "paper",
+        "wood",
+        "coffee",
+        "smelled",
+        "scent",
+        "sound",
+        "voice",
+        "quiet",
+        "rough",
+        "smooth",
+        "soft",
+        "hard",
+        "wet",
+        "dry",
+        "touch",
+        "hand",
+        "skin",
+        "breath",
+    }
+)
 
 
 class QualityAgent(BaseAgent):
@@ -89,9 +147,11 @@ class QualityAgent(BaseAgent):
             tier=tier,
             nofly_violations=nofly,
             structural_flags=structural,
+            structural_weighted_score=structural_weighted,
             sensitivity_violation=sensitivity_violation,
             scene_id=job_context.scene_id,
             notes=notes,
+            metrics=scene_metrics,
         )
 
         logger.info(
@@ -111,7 +171,6 @@ class QualityAgent(BaseAgent):
         """Call after scene is finalized (GO decision) to update all 10 ledgers."""
         editor_data = job_context.output_data.get("editor_agent", {})
         text: str = editor_data.get("edited_text", job_context.final_text)
-        word_count = len(text.split()) if text else 0
 
         import uuid as _uuid
         from datetime import UTC, datetime
@@ -120,21 +179,23 @@ class QualityAgent(BaseAgent):
         from pipeline.ledgers.character_metrics import compute_character_metrics
 
         nofly = int(editor_data.get("nofly_violations", 0))
+        structural = int(editor_data.get("structural_flags", 0))
+        metrics = self._extract_scene_metrics(job_context)
         metrics_event = BookMetricsEvent(
             event_id=str(_uuid.uuid4())[:8],
             book_id=job_context.book_id,
             scene_id=job_context.scene_id,
             chapter_id=str(job_context.chapter_id),
             timestamp=datetime.now(UTC).isoformat(),
-            word_count=word_count,
-            interiority_pct=0.20,
-            dialogue_ratio=0.30,
-            exposition_pct=0.25,
-            action_pct=0.25,
-            sensory_density_per_1k=0.0,
-            em_dash_density=0.0,
-            sentence_length_avg=0.0,
-            ai_tell_count=nofly,
+            word_count=int(metrics["word_count"]),
+            interiority_pct=metrics["interiority_pct"],
+            dialogue_ratio=metrics["dialogue_ratio"],
+            exposition_pct=metrics["exposition_pct"],
+            action_pct=metrics["action_pct"],
+            sensory_density_per_1k=metrics["sensory_density_per_1k"],
+            em_dash_density=metrics["em_dash_density"],
+            sentence_length_avg=metrics["sentence_length_avg"],
+            ai_tell_count=nofly + structural,
             no_fly_violations=nofly,
             heat_curve_position=float(job_context.heat_level) / 5.0,
             character_metrics=compute_character_metrics(text),
@@ -153,14 +214,13 @@ class QualityAgent(BaseAgent):
 
     def _extract_scene_metrics(self, job_context: JobContext) -> dict[str, float]:
         editor_data = job_context.output_data.get("editor_agent", {})
-        text: str = editor_data.get("edited_text", "")
-        words = text.split() if text else []
-        return {
-            "word_count": float(len(words)),
-            "interiority_pct": 0.20,
-            "dialogue_ratio": 0.30,
-            "ai_tell_count": float(editor_data.get("nofly_violations", 0)),
-        }
+        text: str = editor_data.get("edited_text") or job_context.final_text
+        metrics = _compute_text_metrics(text)
+        metrics["ai_tell_count"] = float(
+            int(editor_data.get("nofly_violations", 0))
+            + int(editor_data.get("structural_flags", 0))
+        )
+        return metrics
 
     def _get_running_totals(self, job_context: JobContext) -> dict[str, float]:
         try:
@@ -312,3 +372,51 @@ def _minimum_scene_word_count(word_count_target: int) -> int:
     if word_count_target <= 0:
         return 0
     return max(1, round(word_count_target * _SCENE_WORD_TARGET_MIN_RATIO))
+
+
+def _compute_text_metrics(text: str) -> dict[str, float]:
+    words = _WORD_RE.findall(text)
+    word_count = len(words)
+    if word_count == 0:
+        return {
+            "word_count": 0.0,
+            "interiority_pct": 0.0,
+            "dialogue_ratio": 0.0,
+            "exposition_pct": 0.0,
+            "action_pct": 0.0,
+            "sensory_density_per_1k": 0.0,
+            "em_dash_density": 0.0,
+            "sentence_length_avg": 0.0,
+        }
+
+    dialogue_words = sum(
+        len(_WORD_RE.findall(match.group(1))) for match in _DIALOGUE_RE.finditer(text)
+    )
+    sentences = [
+        sentence.strip() for sentence in _SENTENCE_RE.split(text.strip()) if sentence.strip()
+    ]
+    sentence_lengths = [len(_WORD_RE.findall(sentence)) for sentence in sentences]
+    interiority_words = _words_in_matching_sentences(sentences, _INTERIORITY_RE)
+    exposition_words = _words_in_matching_sentences(sentences, _EXPOSITION_RE)
+    action_words = _words_in_matching_sentences(sentences, _ACTION_RE)
+    sensory_count = sum(1 for word in words if word.lower() in _SENSORY_WORDS)
+    per_1k = max(1.0, word_count / 1000.0)
+
+    return {
+        "word_count": float(word_count),
+        "interiority_pct": min(1.0, interiority_words / word_count),
+        "dialogue_ratio": min(1.0, dialogue_words / word_count),
+        "exposition_pct": min(1.0, exposition_words / word_count),
+        "action_pct": min(1.0, action_words / word_count),
+        "sensory_density_per_1k": sensory_count / per_1k,
+        "em_dash_density": (text.count("—") + text.count("–")) / per_1k,
+        "sentence_length_avg": sum(sentence_lengths) / len(sentence_lengths)
+        if sentence_lengths
+        else 0.0,
+    }
+
+
+def _words_in_matching_sentences(sentences: list[str], pattern: re.Pattern[str]) -> int:
+    return sum(
+        len(_WORD_RE.findall(sentence)) for sentence in sentences if pattern.search(sentence)
+    )

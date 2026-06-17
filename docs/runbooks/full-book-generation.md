@@ -67,6 +67,8 @@ Partial `--max-scenes` runs truncate only the in-memory inventory. The source `s
 
 Generation-time word-count enforcement happens before final verification: `QualityAgent` marks a scene `needs_review` when the edited text is below 90% of `JobContext.word_count_target`. That note routes through the normal REVISE loop, and `WriterAgent` receives the prior draft plus `word_count_under_target` feedback so it can expand rather than start blind. `WriterAgent` always recomputes `WriterOutput.word_count` from `draft_text`; model-reported word counts are never trusted. If retries are exhausted and a scene force-resolves, `make run-full-book` reports the unattended run as failed even when files were produced.
 
+Runtime prose metrics are deterministic. `QualityAgent` computes `BookMetricsLedger` values from edited scene text instead of placeholders: word count, interiority, dialogue ratio, exposition, action, sensory density per 1K, em-dash density, sentence-length average, and `ai_tell_count = nofly_violations + structural_flags`. The same metrics are included in `QualityResult.metrics` and propagated into EvoSkill traces as numeric `metric_*` fields, alongside tier flags and weighted structural points.
+
 Production runner outputs for `cedar-harbor-romance/book01`:
 
 - `data/series/cedar-harbor-romance/data/books/book01/runs/{run_id}/book_run_status.jsonl`

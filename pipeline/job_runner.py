@@ -254,8 +254,11 @@ class JobRunner:
                 # QualityResult may have tier or needs_review fields
                 if "tier" in quality_output:
                     quality_scores["tier_score"] = 1.0 if quality_output["tier"] == "pass" else 0.0
+                    quality_scores["tier_warn"] = 1.0 if quality_output["tier"] == "warn" else 0.0
+                    quality_scores["tier_fail"] = 1.0 if quality_output["tier"] == "fail" else 0.0
                 if "needs_review" in quality_output:
                     quality_scores["needs_review"] = 1.0 if quality_output["needs_review"] else 0.0
+                quality_scores.update(_numeric_quality_trace_fields(quality_output))
                 raw_critic_scores = quality_output.get("critic_scores")
                 if isinstance(raw_critic_scores, dict):
                     critic_scores = {
@@ -351,3 +354,29 @@ class JobRunner:
             error=final_state.get("error", ""),
             final_state=final_state,
         )
+
+
+def _numeric_quality_trace_fields(quality_output: dict[str, Any]) -> dict[str, float]:
+    """Return numeric QualityResult fields that should enrich EvoSkill traces.
+
+    Field names intentionally avoid the ``*_score`` suffix so TraceCollector does
+    not treat raw counts like structural flags as thresholded critic scores.
+    """
+    result: dict[str, float] = {}
+    direct_fields = {
+        "nofly_violations": "nofly_violations",
+        "structural_flags": "structural_flags",
+        "structural_weighted_score": "structural_weighted_points",
+    }
+    for source_key, target_key in direct_fields.items():
+        value = quality_output.get(source_key)
+        if isinstance(value, int | float):
+            result[target_key] = float(value)
+
+    metrics = quality_output.get("metrics")
+    if isinstance(metrics, dict):
+        for key, value in metrics.items():
+            if isinstance(value, int | float):
+                result[f"metric_{key}"] = float(value)
+
+    return result

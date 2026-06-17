@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 from pipeline.agents.agent_models import WriterOutput
 from pipeline.agents.editor_agent import EditorAgent
-from pipeline.agents.quality_agent import QualityAgent, _classify_tier
+from pipeline.agents.quality_agent import QualityAgent, _classify_tier, _compute_text_metrics
 from pipeline.agents.writer_agent import WriterAgent
 from pipeline.core.agent_context import AgentContext
 from pipeline.core.job_context import JobContext
@@ -192,6 +192,48 @@ def test_structural_weighted_threshold_aligns_with_ai_tell_eval() -> None:
 
     assert borderline_tier == "warn"
     assert borderline_needs_review is False
+
+
+def test_quality_agent_uses_deterministic_text_metrics(tmp_path: Path) -> None:
+    ctx = _make_context(tmp_path)
+    agent = QualityAgent(ctx=ctx)
+    text = (
+        'Mira felt the salt wind cut through the open window. "We can fix it," '
+        "Theo said, reaching for the blue plans. She remembered the old inn, "
+        "turned toward the harbor light, and set her hand on the warm wood."
+    )
+    job = JobContext(
+        job_id="job1",
+        series_id="series1",
+        book_id="book1",
+        chapter_id=1,
+        scene_id="scene1",
+        spec=_make_spec(),
+        word_count_target=30,
+        output_data={
+            "editor_agent": {
+                "edited_text": text,
+                "nofly_violations": 1,
+                "structural_flags": 2,
+                "structural_weighted_score": 3,
+            }
+        },
+    )
+
+    result = agent.run(job)
+    quality = result.output_data["quality_agent"]
+    agent.update_ledgers(result)
+    totals = ctx.ledger_manager.book_metrics.compute_running_totals()
+
+    assert quality["metrics"]["word_count"] == _compute_text_metrics(text)["word_count"]
+    assert quality["metrics"]["dialogue_ratio"] > 0
+    assert quality["metrics"]["sensory_density_per_1k"] > 0
+    assert quality["metrics"]["ai_tell_count"] == 3.0
+    assert quality["structural_weighted_score"] == 3
+    assert totals.ai_tell_count_total == 3
+    assert totals.dialogue_ratio_running > 0
+    assert totals.sensory_density_running > 0
+    ctx.ledger_manager.close()
 
 
 def test_editor_rejects_structural_edit_that_shrinks_below_minimum(tmp_path: Path) -> None:

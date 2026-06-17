@@ -291,6 +291,60 @@ def test_job_runner_trace_marks_revised_go_as_failure(
     assert saved_trace["routing_decisions"] == ["REVISE", "GO"]
 
 
+def test_job_runner_trace_includes_quality_metrics(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Phase 12: traces carry actionable deterministic quality metrics."""
+    from pipeline.evoskill.trace_collector import TraceCollector
+
+    _patch_agents(monkeypatch, "clean")
+
+    data_root = tmp_path / "data"
+    runner = JobRunner(
+        agent_ctx=_make_context(tmp_path),
+        model_router=MagicMock(),
+        max_revisions=1,
+        trace_collector=TraceCollector(data_root=data_root),
+    )
+    final_state: dict[str, Any] = {
+        "convergence_decision": "GO",
+        "revise_count": 0,
+        "final_text": "Clean edited scene.",
+        "bible_contradiction": False,
+        "overdue_promises": [],
+        "writer_output": {},
+        "editor_output": {},
+        "quality_output": {
+            "tier": "warn",
+            "needs_review": False,
+            "nofly_violations": 1,
+            "structural_flags": 2,
+            "structural_weighted_score": 3,
+            "metrics": {
+                "word_count": 120.0,
+                "dialogue_ratio": 0.35,
+                "sensory_density_per_1k": 8.5,
+            },
+        },
+    }
+
+    runner._collect_trace_safe(_make_job(), cast(SceneState, final_state))  # noqa: SLF001
+
+    trace_path = data_root / "series1" / "traces" / "ch01_sc01.json"
+    saved_trace = json.loads(trace_path.read_text(encoding="utf-8"))
+    quality_scores = saved_trace["quality_scores"]
+    assert quality_scores["tier_score"] == 0.0
+    assert quality_scores["tier_warn"] == 1.0
+    assert quality_scores["needs_review"] == 0.0
+    assert quality_scores["nofly_violations"] == 1.0
+    assert quality_scores["structural_flags"] == 2.0
+    assert quality_scores["structural_weighted_points"] == 3.0
+    assert quality_scores["metric_word_count"] == 120.0
+    assert quality_scores["metric_dialogue_ratio"] == 0.35
+    assert quality_scores["metric_sensory_density_per_1k"] == 8.5
+
+
 def test_job_runner_trace_collection_failure_does_not_break_scene(
     tmp_path: Path,
     monkeypatch: Any,
