@@ -85,6 +85,18 @@ Production full-book ledgers are run-local. `scripts/run_full_book.py` writes `L
 
 The Author Dashboard book-level endpoints prefer `book_run_summary.ledger_data_root` when present, so `GET /books/{book_id}/ledgers`, metric history, character metrics, promise, intimacy, and quality-gate reads match the generated run artifact instead of any stale shared proof-run ledgers. Older summaries that predate `ledger_data_root` remain readable but cannot retroactively provide run-local ledger history.
 
+Fresh runtime-metrics validation, 2026-06-17:
+
+- Run ID: `cedar-harbor-book01-runtime-metrics-validation`.
+- Command progression: staged Anthropic test-tier run with `--max-scenes 10 -> 20 -> 30 -> 40 -> 50` under a user-approved `$5` cap.
+- Final result: `50/50` scenes completed, `50/50` GO decisions, `0` force-resolved scenes, deterministic eval PASS, dashboard summary PASS, strict `BookStructuralVerifier` PASS.
+- Final status word count: `65524` against the `65000` target.
+- Run-local ledger word total: `66108`; difference from status count is expected because runtime `BookMetricsLedger` uses deterministic tokenized counting.
+- Run-local ledger path: `data/series/cedar-harbor-romance/data/books/book01/runs/cedar-harbor-book01-runtime-metrics-validation/ledgers`.
+- Dashboard dogfood against `FF_DASHBOARD_DATA_ROOT=data/series/cedar-harbor-romance/data`: summary found/pass, `50` scene metric-history rows, `50` quality-gate rows.
+- Run-local EvoSkill traces: `50` trace files with `metric_*` quality fields; no-live nightly promoted skill `8db503d7-9692-4fde-8312-3935323728a3`.
+- Cost: `$1.3195088` / `620686` tokens, below the `$5` cap.
+
 Run strict final-manuscript acceptance instead of draft acceptance with:
 
 ```bash

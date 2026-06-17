@@ -252,6 +252,13 @@ Items explicitly deferred to V2. Do not implement in V1.
 
 ## Section 4: Task 011–015 Decisions
 
+### T014-033 — Fresh Runtime-Metrics Full-Book Validation Passed
+**Date:** 2026-06-17
+**Statement:** The user-approved `$5` Anthropic test-tier validation run `cedar-harbor-book01-runtime-metrics-validation` completed the full Cedar Harbor `book01` scaffold after run-local ledger and deterministic runtime BookMetrics hardening. Final summary: `50/50` scenes completed, `50/50` GO decisions, `0` force-resolved scenes, deterministic eval PASS, dashboard summary PASS, strict `BookStructuralVerifier` PASS, final status word count `65524` against the `65000` target, run-local ledger word total `66108`, and total cost `$1.3195088` / `620686` tokens.
+**Rationale:** This is the first full-book proof where manuscript generation, run-local ledgers, dashboard reads, deterministic BookMetrics, enriched EvoSkill traces, and no-live learning-loop closure all came from the corrected runtime path. The dashboard API resolved the fresh summary, returned `50` scene metric-history rows and `50` quality-gate rows, and read ledger totals from `book_run_summary.ledger_data_root`. Run-local EvoSkill trace root contained `50` enriched traces with `metric_*` fields; no-live nightly promoted skill `8db503d7-9692-4fde-8312-3935323728a3`.
+**Supersedes:** T014-030 as the latest Cedar Harbor full-book validation baseline.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
 ### T014-032 — Runtime BookMetrics Are Deterministic
 **Date:** 2026-06-17
 **Statement:** `QualityAgent` now computes runtime `BookMetricsLedger` prose metrics from edited scene text instead of writing placeholder constants. `QualityResult` carries the computed metrics and `structural_weighted_score`; `BookMetricsEvent` records computed word count, interiority, dialogue ratio, exposition, action, sensory density, em-dash density, sentence-length average, and `ai_tell_count = nofly_violations + structural_flags`. `JobRunner` enriches EvoSkill traces with tier flags, NoFly/structural counts, weighted structural points, and numeric `metric_*` values.
