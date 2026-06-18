@@ -252,6 +252,30 @@ Items explicitly deferred to V2. Do not implement in V1.
 
 ## Section 4: Task 011–015 Decisions
 
+### T014-036 — Targeted Revision Comparison Is a No-Live Gate
+**Date:** 2026-06-18
+**Statement:** The pipeline now has a no-live targeted revision comparison gate. `pipeline/revision/revision_compare.py` and `scripts/compare_revision_outputs.py` compare revised scene files against `revision_packet_manifest.json` and the packet JSON files, producing `targeted_revision_comparison.json` with source-hash checks, word-count target-band checks, Markdown appendix detection, weighted structural/AI-tell deltas, optional NoFlyScanner deltas, and repeated-phrase reduction checks. The CLI exits nonzero when any revised scene fails.
+**Rationale:** Revision packets identify what to fix, but a later human/model revision pass needs deterministic acceptance criteria before any revised prose is trusted. This keeps revision validation local and no-live, catches stale-source comparisons via source SHA1, and gives the author a before/after metric report without spending model tokens.
+**Supersedes:** Packet-only handoff with no deterministic revised-output validation gate.
+**Verification:** `./.venv/bin/pytest tests/unit/revision/test_targeted_packets.py tests/unit/revision/test_revision_compare.py` passed (`4 passed`). `make lint` passed. `OPENAI_API_KEY= ANTHROPIC_API_KEY= make test` passed (`410 passed, 6 skipped`). Cedar Harbor dogfood regenerated the no-live backlog/packets and compared unchanged generated scenes as a negative control; `/tmp/opencode/targeted_revision_comparison_originals.json` returned `passed = false` and flagged `8` of `10` targeted scenes as still needing revision.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-035 — Targeted Revision Packets Are No-Live Artifacts
+**Date:** 2026-06-17
+**Statement:** The targeted revision plan now has a packetization step. `pipeline/revision/targeted_packets.py` and `scripts/build_revision_packets.py` convert `book_revision_backlog.json` into per-scene JSON and Markdown packets containing direct scene issues, relevant cross-scene repeated-phrase issues, global book-level context, revision objectives, constraints, current text hash, optional current text, and a no-live output contract. Packets are planning artifacts only; they do not rewrite prose or call a model.
+**Rationale:** The autopsy backlog identifies where revision should happen, but a later human or model-driven revision pass needs scene-local packets with exact issues, constraints, and source text. Keeping packet generation no-live lets the author inspect or hand off the highest-severity scenes before approving any model spend.
+**Supersedes:** A targeted plan that only listed scene IDs and issue IDs without actionable per-scene revision context.
+**Verification:** `./.venv/bin/pytest tests/unit/revision/test_book_autopsy.py tests/unit/revision/test_targeted_packets.py` passed (`4 passed`). `make lint` passed. `OPENAI_API_KEY= ANTHROPIC_API_KEY= make test` passed (`408 passed, 6 skipped`). Cedar Harbor packet dogfood built `10` packets under `/tmp/opencode/revision_packets`; top packet `ch25_sc02` contained `9` scene/cross-scene issues plus global book-level context.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
+### T014-034 — No-Live Book Revision Intelligence Layer
+**Date:** 2026-06-17
+**Statement:** The pipeline now has a no-live revision intelligence layer for completed book runs. `QualityAgent.update_ledgers()` dispatches deterministic narrative extraction into the runtime narrative ledgers: scene rhythm, character arcs, intimacy escalation, reader information, subplot, trope commitment, and promises. New deterministic book-level reviewers build `RevisionIssue` backlogs over completed run artifacts, and `scripts/analyze_book_run.py` writes `book_revision_backlog.json` plus `targeted_revision_plan.json` for the highest-severity scenes.
+**Rationale:** The Cedar Harbor full-book validation proved generation and deterministic BookMetrics, but the next product gap is revision targeting: identify where a complete draft needs structural, romance-arc, promise, pacing, AI-tell, word-budget, and repeated-phrase work without spending model tokens. The old finalized-scene path still wrote `scene_type = action` and left narrative ledgers empty. Future runs now populate those ledgers during finalization; old summaries remain analyzable and correctly surface missing narrative-ledger coverage.
+**Supersedes:** Placeholder runtime `scene_type = action` and empty narrative-ledger dispatch during finalized scene updates.
+**Verification:** `./.venv/bin/pytest tests/unit/ledgers/test_narrative_extractor.py tests/unit/revision/test_book_autopsy.py tests/unit/test_word_count_enforcement.py tests/unit/ledgers/test_ledger_system.py` passed (`37 passed`). `make lint` passed. `OPENAI_API_KEY= ANTHROPIC_API_KEY= make test` passed (`406 passed, 6 skipped`). No-live Cedar Harbor autopsy command completed against `cedar-harbor-book01-runtime-metrics-validation`, found `54` issues, and selected `10` targeted revision scenes.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
 ### T014-033 — Fresh Runtime-Metrics Full-Book Validation Passed
 **Date:** 2026-06-17
 **Statement:** The user-approved `$5` Anthropic test-tier validation run `cedar-harbor-book01-runtime-metrics-validation` completed the full Cedar Harbor `book01` scaffold after run-local ledger and deterministic runtime BookMetrics hardening. Final summary: `50/50` scenes completed, `50/50` GO decisions, `0` force-resolved scenes, deterministic eval PASS, dashboard summary PASS, strict `BookStructuralVerifier` PASS, final status word count `65524` against the `65000` target, run-local ledger word total `66108`, and total cost `$1.3195088` / `620686` tokens.

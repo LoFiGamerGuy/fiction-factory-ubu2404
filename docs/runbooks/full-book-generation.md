@@ -69,6 +69,8 @@ Generation-time word-count enforcement happens before final verification: `Quali
 
 Runtime prose metrics are deterministic. `QualityAgent` computes `BookMetricsLedger` values from edited scene text instead of placeholders: word count, interiority, dialogue ratio, exposition, action, sensory density per 1K, em-dash density, sentence-length average, and `ai_tell_count = nofly_violations + structural_flags`. The same metrics are included in `QualityResult.metrics` and propagated into EvoSkill traces as numeric `metric_*` fields, alongside tier flags and weighted structural points.
 
+Runtime narrative ledgers are deterministic. After a scene reaches GO, `QualityAgent.update_ledgers()` now classifies the scene rhythm type and extracts lightweight narrative events for `CharacterArcLedger`, `IntimacyEscalationLedger`, `ReaderInformationStateLedger`, `SubplotLedger`, `TropeCommitmentLedger`, and `PromiseLedger`. The extractor is intentionally no-live: it uses scene text, scene brief, heat level, deterministic prose metrics, and explicit speaker attribution fallback data. This replaces the old placeholder `scene_type = action` path and makes future dashboard/context-pack narrative summaries non-empty for newly generated runs.
+
 Production runner outputs for `cedar-harbor-romance/book01`:
 
 - `data/series/cedar-harbor-romance/data/books/book01/runs/{run_id}/book_run_status.jsonl`
@@ -84,6 +86,56 @@ Generated production artifacts under the committed `data/series/*/data/books/*` 
 Production full-book ledgers are run-local. `scripts/run_full_book.py` writes `LedgerManager` state under `runs/{run_id}/ledgers/` and records that absolute path in `book_run_summary.json` as `ledger_data_root`. Resuming the same run ID reuses those ledgers so staged `20 -> 30 -> 40 -> 50` continuation does not lose prior scene metrics. Starting a different run ID gets an isolated ledger root. Using `--force` removes that run ID's ledger root before regeneration.
 
 The Author Dashboard book-level endpoints prefer `book_run_summary.ledger_data_root` when present, so `GET /books/{book_id}/ledgers`, metric history, character metrics, promise, intimacy, and quality-gate reads match the generated run artifact instead of any stale shared proof-run ledgers. Older summaries that predate `ledger_data_root` remain readable but cannot retroactively provide run-local ledger history.
+
+## Book Run Autopsy
+
+Run a no-live book autopsy after a full-book run to produce a revision backlog and targeted revision plan:
+
+```bash
+./.venv/bin/python scripts/analyze_book_run.py \
+  --summary-path data/series/cedar-harbor-romance/data/books/book01/book_run_summary.json \
+  --output /tmp/opencode/book_revision_backlog.json \
+  --targeted-plan-output /tmp/opencode/targeted_revision_plan.json \
+  --target-scenes 10
+```
+
+`scripts/analyze_book_run.py` reads `book_run_summary.json`, finalized scene files, run-local SQLite ledgers, run-local EvoSkill traces, deterministic eval rows, and dashboard summary fields. It writes:
+
+- `book_revision_backlog.json` with sorted `RevisionIssue` rows, counts by category/source, narrative ledger event counts, repeated phrase signals, and embedded targeted plan.
+- `targeted_revision_plan.json` with the highest-severity scene IDs, current paths, word counts, adjusted targets, and issue IDs for a later targeted revision pass.
+
+Cedar Harbor dogfood, 2026-06-17: the autopsy over `cedar-harbor-book01-runtime-metrics-validation` completed without live model calls, found `54` issues, and selected `10` targeted scenes. Because that run predates runtime narrative extraction, the backlog correctly flags empty character arc, intimacy, promise, and subplot ledgers; newly generated runs should populate those ledgers during `QualityAgent.update_ledgers()`.
+
+Build actionable no-live revision packets from a backlog with:
+
+```bash
+./.venv/bin/python scripts/build_revision_packets.py \
+  --backlog-path /tmp/opencode/book_revision_backlog.json \
+  --output-dir /tmp/opencode/revision_packets
+```
+
+Each selected scene gets:
+
+- `{scene_id}_revision_packet.json` — machine-readable scene packet with direct issues, relevant cross-scene repeated-phrase issues, global book-level context, revision objectives, constraints, scene text hash, and output contract.
+- `{scene_id}_revision_packet.md` — human-readable packet with the current scene text and same objectives/constraints.
+- `revision_packet_manifest.json` — packet index keyed by scene ID.
+
+Cedar Harbor packet dogfood, 2026-06-17: the packet builder produced `10` scene packets for the targeted plan. The top packet, `ch25_sc02`, included `9` scene/cross-scene issues plus global book-level context and current text, with no live model calls.
+
+Validate revised scene outputs against those packets with:
+
+```bash
+./.venv/bin/python scripts/compare_revision_outputs.py \
+  --packet-manifest /tmp/opencode/revision_packets/revision_packet_manifest.json \
+  --revised-dir /path/to/revised-scenes \
+  --output /tmp/opencode/targeted_revision_comparison.json
+```
+
+`scripts/compare_revision_outputs.py` is also no-live. It reads the packet manifest and revised scene files, then writes `targeted_revision_comparison.json` with per-scene before/after metrics and pass/fail checks. The gate checks source-scene SHA1 provenance, non-empty revised text, word-count target band, no Markdown separator/alternate-version appendix, weighted structural score and AI-tell score not worse for structural packets, NoFlyScanner violations not worse, and repeated-phrase reductions for packeted repeated-phrase issues. It returns exit code `1` when any scene fails so it can be used as a revision gate.
+
+Packet hashes always refer to the complete source scene text. Packet builders may omit or truncate embedded `current_text`, but `current_scene_sha1` still guards against comparing a revision to stale source material.
+
+Cedar Harbor comparison dogfood, 2026-06-18: regenerated the autopsy and packets from `cedar-harbor-book01-runtime-metrics-validation`, then compared the packets against the unchanged generated scene directory as an intentional negative control. The comparator wrote `/tmp/opencode/targeted_revision_comparison_originals.json`, returned `passed = false`, and flagged `8` of `10` targeted scenes as still needing revision. This is expected because no revised prose had been supplied.
 
 Fresh runtime-metrics validation, 2026-06-17:
 

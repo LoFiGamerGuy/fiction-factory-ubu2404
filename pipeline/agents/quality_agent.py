@@ -177,16 +177,26 @@ class QualityAgent(BaseAgent):
 
         from pipeline.ledgers.book_metrics_ledger import BookMetricsEvent
         from pipeline.ledgers.character_metrics import compute_character_metrics
+        from pipeline.ledgers.narrative_extractor import extract_narrative_events
 
         nofly = int(editor_data.get("nofly_violations", 0))
         structural = int(editor_data.get("structural_flags", 0))
         metrics = self._extract_scene_metrics(job_context)
+        character_metrics = compute_character_metrics(text)
+        timestamp = datetime.now(UTC).isoformat()
+        narrative = extract_narrative_events(
+            job_context=job_context,
+            text=text,
+            metrics=metrics,
+            character_metrics=character_metrics,
+            timestamp=timestamp,
+        )
         metrics_event = BookMetricsEvent(
             event_id=str(_uuid.uuid4())[:8],
             book_id=job_context.book_id,
             scene_id=job_context.scene_id,
             chapter_id=str(job_context.chapter_id),
-            timestamp=datetime.now(UTC).isoformat(),
+            timestamp=timestamp,
             word_count=int(metrics["word_count"]),
             interiority_pct=metrics["interiority_pct"],
             dialogue_ratio=metrics["dialogue_ratio"],
@@ -198,16 +208,23 @@ class QualityAgent(BaseAgent):
             ai_tell_count=nofly + structural,
             no_fly_violations=nofly,
             heat_curve_position=float(job_context.heat_level) / 5.0,
-            character_metrics=compute_character_metrics(text),
+            sex_scene_flag=narrative.scene_type == "sex",
+            character_metrics=character_metrics,
         )
 
         scene_result = SceneResult(
             scene_id=job_context.scene_id,
             book_id=job_context.book_id,
             chapter_id=str(job_context.chapter_id),
-            timestamp=datetime.now(UTC).isoformat(),
-            scene_type="action",
+            timestamp=timestamp,
+            scene_type=narrative.scene_type,
             metrics_event=metrics_event,
+            character_arc_events=narrative.character_arc_events,
+            intimacy_events=narrative.intimacy_events,
+            revelation_events=narrative.revelation_events,
+            subplot_events=narrative.subplot_events,
+            trope_events=narrative.trope_events,
+            promise_events=narrative.promise_events,
         )
         self.ctx.ledger_manager.update(scene_result)
         logger.info("QualityAgent: updated all 10 ledgers for %s", job_context.scene_id)
