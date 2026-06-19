@@ -252,6 +252,14 @@ Items explicitly deferred to V2. Do not implement in V1.
 
 ## Section 4: Task 011–015 Decisions
 
+### T014-037 — Revision Application Is No-Live and Fail-Closed
+**Date:** 2026-06-18
+**Statement:** The pipeline now has a no-live revision application gate. `pipeline/revision/revision_apply.py` and `scripts/apply_revision_outputs.py` read `targeted_revision_comparison.json`, refuse failed comparison reports unless `--allow-partial` is explicit, copy accepted revised scene files into an isolated `accepted_revisions/` directory, assemble `manuscript_revised.md` from original scene order plus accepted replacements, and write `revision_application_summary.json`. Original generated scene files and `manuscript.md` are never overwritten.
+**Rationale:** After a revision comparison passes, authors need a safe manuscript variant they can read without mutating the baseline draft. Refusing failed comparison reports by default preserves the deterministic trust boundary: packets identify work, comparison validates it, application only assembles accepted revisions.
+**Supersedes:** Manual copy/assembly of revised scenes after comparison.
+**Verification:** `./.venv/bin/pytest tests/unit/revision/test_revision_apply.py tests/unit/revision/test_revision_compare.py tests/unit/revision/test_targeted_packets.py` passed (`7 passed`). `make lint` passed. `OPENAI_API_KEY= ANTHROPIC_API_KEY= make test` passed (`413 passed, 6 skipped`). Cedar Harbor dogfood regenerated the failed negative-control comparison and `scripts/apply_revision_outputs.py` correctly refused to apply it without `--allow-partial`.
+**Runbook:** `docs/runbooks/full-book-generation.md`
+
 ### T014-036 — Targeted Revision Comparison Is a No-Live Gate
 **Date:** 2026-06-18
 **Statement:** The pipeline now has a no-live targeted revision comparison gate. `pipeline/revision/revision_compare.py` and `scripts/compare_revision_outputs.py` compare revised scene files against `revision_packet_manifest.json` and the packet JSON files, producing `targeted_revision_comparison.json` with source-hash checks, word-count target-band checks, Markdown appendix detection, weighted structural/AI-tell deltas, optional NoFlyScanner deltas, and repeated-phrase reduction checks. The CLI exits nonzero when any revised scene fails.

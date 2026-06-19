@@ -137,6 +137,27 @@ Packet hashes always refer to the complete source scene text. Packet builders ma
 
 Cedar Harbor comparison dogfood, 2026-06-18: regenerated the autopsy and packets from `cedar-harbor-book01-runtime-metrics-validation`, then compared the packets against the unchanged generated scene directory as an intentional negative control. The comparator wrote `/tmp/opencode/targeted_revision_comparison_originals.json`, returned `passed = false`, and flagged `8` of `10` targeted scenes as still needing revision. This is expected because no revised prose had been supplied.
 
+Apply accepted revised scene outputs into a separate manuscript variant with:
+
+```bash
+./.venv/bin/python scripts/apply_revision_outputs.py \
+  --comparison-path /tmp/opencode/targeted_revision_comparison.json \
+  --output-dir /tmp/opencode/revision_application
+```
+
+`scripts/apply_revision_outputs.py` is no-live and fail-closed. It refuses a failed comparison report unless `--allow-partial` is set. When allowed, it copies only passed revised scene files into `accepted_revisions/`, assembles `manuscript_revised.md` from the original book scene order plus accepted replacements, and writes `revision_application_summary.json`. Original generated scene files and `manuscript.md` are never overwritten.
+
+Use `--allow-partial` only when the author explicitly wants a partial manuscript variant where failed target scenes remain as originals:
+
+```bash
+./.venv/bin/python scripts/apply_revision_outputs.py \
+  --comparison-path /tmp/opencode/targeted_revision_comparison.json \
+  --output-dir /tmp/opencode/revision_application_partial \
+  --allow-partial
+```
+
+Cedar Harbor application dogfood, 2026-06-18: applying `/tmp/opencode/targeted_revision_comparison_originals.json` without `--allow-partial` correctly refused with `Revision comparison failed; refusing to apply revisions...` because the negative-control comparison failed. No manuscript variant was produced from failed revisions.
+
 Fresh runtime-metrics validation, 2026-06-17:
 
 - Run ID: `cedar-harbor-book01-runtime-metrics-validation`.

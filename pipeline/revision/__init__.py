@@ -2,6 +2,7 @@
 
 from pipeline.revision.book_autopsy import build_book_revision_backlog
 from pipeline.revision.models import AnalyzedScene, BookRunContext, RevisionIssue
+from pipeline.revision.revision_apply import apply_revision_outputs
 from pipeline.revision.revision_compare import compare_revision_outputs
 from pipeline.revision.targeted_packets import build_targeted_revision_packets
 
@@ -11,5 +12,6 @@ __all__ = [
     "RevisionIssue",
     "build_book_revision_backlog",
     "build_targeted_revision_packets",
+    "apply_revision_outputs",
     "compare_revision_outputs",
 ]
